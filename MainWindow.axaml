@@ -1,0 +1,68 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:VariLab.ViewModels"
+        xmlns:tabs="using:VariLab.Views.Tabs"
+        mc:Ignorable="d" d:DesignWidth="1300" d:DesignHeight="900"
+        x:Class="VariLab.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Width="1300" Height="900"
+        MinWidth="1100" MinHeight="700">
+
+    <DockPanel>
+
+        <!-- ── Menu bar ─────────────────────────────────────────────────── -->
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_Tools">
+                <MenuItem Header="Diagnostics"
+                          Click="OnDiagnosticsClick"/>
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Header="User Guide"
+                          Click="OnUserGuideClick"/>
+                <MenuItem Header="Revision History"
+                          Click="OnRevisionHistoryClick"/>
+                <Separator/>
+                <MenuItem Header="About VariLab"
+                          Click="OnAboutClick"/>
+            </MenuItem>
+        </Menu>
+
+        <!-- ── Separator ────────────────────────────────────────────────── -->
+        <Rectangle DockPanel.Dock="Top"
+                   Height="1"
+                   Fill="{StaticResource BrushSep}"
+                   Margin="10,4,10,0"/>
+
+        <!-- ── Bottom attribution bar ───────────────────────────────────── -->
+        <Border DockPanel.Dock="Bottom" Padding="0,2,10,4">
+            <TextBlock x:Name="AttributionText"
+                       Classes="hint"
+                       HorizontalAlignment="Right"/>
+        </Border>
+
+        <!-- ── Tab control ──────────────────────────────────────────────── -->
+        <!-- Tab index: Data=0, Comp Stars=1, Photometry=2, Results=3 -->
+        <TabControl x:Name="MainTabs">
+
+            <TabItem Header="   Data   ">
+                <tabs:DataView DataContext="{Binding Data}"/>
+            </TabItem>
+
+            <TabItem Header="   Comp Stars   ">
+                <tabs:CompStarsView DataContext="{Binding CompStars}"/>
+            </TabItem>
+
+            <TabItem Header="   Photometry   ">
+                <tabs:PhotometryView DataContext="{Binding Photometry}"/>
+            </TabItem>
+
+            <TabItem Header="   Results   ">
+                <tabs:ResultsView DataContext="{Binding Results}"/>
+            </TabItem>
+
+        </TabControl>
+
+    </DockPanel>
+</Window>

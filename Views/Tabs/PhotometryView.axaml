@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VariLab.ViewModels"
+             xmlns:dg="using:Avalonia.Controls"
+             x:DataType="vm:PhotometryViewModel"
+             x:Class="VariLab.Views.Tabs.PhotometryView">
+
+    <DockPanel Margin="16">
+
+        <StackPanel DockPanel.Dock="Top" Spacing="12">
+            <TextBlock Classes="h2" Text="Photometry — Multi-Frame Differential"/>
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="Fixed-aperture photometry on the target and every Stone-ensemble comp star across all frames, combined via weighted-median ensemble differential photometry, with 3σ frame rejection."/>
+
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Classes="primary" Content="Run" Command="{Binding RunCommand}" IsEnabled="{Binding !IsRunning}"/>
+                <Button Classes="toolbar" Content="Cancel" Command="{Binding CancelCommand}" IsEnabled="{Binding IsRunning}"/>
+                <Button Classes="toolbar" Content="Exclude Transit..." Command="{Binding ExcludeTransitCommand}" IsEnabled="{Binding HasPoints}"/>
+                <TextBlock Classes="hint" Text="{Binding Status}" VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <TextBlock Text="{Binding Summary}" FontWeight="Bold" IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        </StackPanel>
+
+        <dg:DataGrid Margin="0,16,0,0" ItemsSource="{Binding Points}" AutoGenerateColumns="False" IsReadOnly="True">
+            <dg:DataGrid.Styles>
+                <Style Selector="DataGridColumnHeader TextBlock">
+                    <Setter Property="FontSize" Value="16.5"/>
+                </Style>
+            </dg:DataGrid.Styles>
+            <dg:DataGrid.Columns>
+                <!-- Mode=OneWay is required on every column here: DataGridTextColumn.Binding defaults to
+                     TwoWay (same as WPF), and even with the DataGrid itself IsReadOnly="True" (which only
+                     blocks *user* editing), Avalonia's non-compiled column binding writes the rendered,
+                     StringFormat-rounded display text back into the bound FramePoint property for any row
+                     that gets rendered/virtualized into view — silently corrupting TargetMag/TargetMagErr
+                     (an "init"-only record property, but reflection-based binding bypasses that) down to
+                     2-decimal precision for whichever rows happened to be visible. Without this, only the
+                     off-screen, never-rendered rows kept their real computed values. -->
+                <dg:DataGridTextColumn Header="File"        Binding="{Binding FileName, Mode=OneWay}"      FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="JD"          Binding="{Binding Jd, Mode=OneWay, StringFormat={}{0:F4}}"            FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="Airmass"     Binding="{Binding Airmass, Mode=OneWay, StringFormat={}{0:F2}}"       FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="Mag"         Binding="{Binding TargetMag, Mode=OneWay, StringFormat={}{0:F2}}"     FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="Mag Err"     Binding="{Binding TargetMagErr, Mode=OneWay, StringFormat={}{0:F2}}"  FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="SNR"         Binding="{Binding TargetSnr, Mode=OneWay, StringFormat={}{0:F2}}"     FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="N Comps"     Binding="{Binding NCompsUsed, Mode=OneWay}"    FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="Rejected"    Binding="{Binding Rejected, Mode=OneWay}"      FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="Reason"      Binding="{Binding RejectReason, Mode=OneWay}"  FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="Excluded"    Binding="{Binding ExcludedFromTransit, Mode=OneWay}"  FontSize="14.5"/>
+            </dg:DataGrid.Columns>
+        </dg:DataGrid>
+
+    </DockPanel>
+</UserControl>

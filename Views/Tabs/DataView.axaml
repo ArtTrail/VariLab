@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VariLab.ViewModels"
+             x:DataType="vm:DataViewModel"
+             x:Class="VariLab.Views.Tabs.DataView">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="16" Spacing="12" MaxWidth="820" HorizontalAlignment="Left">
+
+            <TextBlock Classes="h2" Text="Input"/>
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="Point to a folder of pre-calibrated, plate-solved FITS frames (no calibration or frame registration is performed here — WCS is trusted as-is). The first file's header is read automatically to fill in Target Name and Filter below, and RA/Dec is looked up right after."/>
+
+            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" Margin="0,8,0,0">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Target Directory:" VerticalAlignment="Center" Margin="0,0,10,4"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding InputDirectory}" Margin="0,0,8,4"
+                         ToolTip.Tip="{Binding InputDirectory}"/>
+                <Button Grid.Row="0" Grid.Column="2" Classes="toolbar" Content="Browse…" Command="{Binding BrowseInputDirectoryCommand}" Margin="0,0,0,4"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Output Directory:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding OutputDirectory}" Margin="0,0,8,0"
+                         ToolTip.Tip="{Binding OutputDirectory}"/>
+                <Button Grid.Row="1" Grid.Column="2" Classes="toolbar" Content="Browse…" Command="{Binding BrowseOutputDirectoryCommand}"/>
+            </Grid>
+            <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Text="Where VariLab's numbered VariLab_ResultsN export folders (AAVSO .txt, Stellar Variability .png, Excel report) are saved. Defaults to match Target Directory whenever it changes — browse to a different folder here to save exports somewhere else instead; once you do, it stops following Target Directory."/>
+
+            <TextBlock Classes="h2" Text="Target" Margin="0,16,0,0"/>
+
+            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto" Margin="0,8,0,0">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Target Name:" VerticalAlignment="Center" Margin="0,4,10,4"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding TargetName}" Margin="0,4,8,4" Watermark="star designation, e.g. V0338 Cen — used in AAVSO export"/>
+                <Button Grid.Row="0" Grid.Column="2" Classes="toolbar" Content="Look Up RA/Dec" Command="{Binding LookUpCoordinatesCommand}" IsEnabled="{Binding !IsLookingUp}"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Target RA:" VerticalAlignment="Center" Margin="0,4,10,4"/>
+                <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding TargetRaText}" Margin="0,4,0,4" Watermark="decimal degrees (213.9153) or HH:MM:SS (14:15:39.7)"/>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Target Dec:" VerticalAlignment="Center" Margin="0,4,10,4"/>
+                <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding TargetDecText}" Margin="0,4,0,4" Watermark="decimal degrees (-47.4795) or +DD:MM:SS (-47:28:46)"/>
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Filter:" VerticalAlignment="Center" Margin="0,4,10,4"/>
+                <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{Binding FilterOptions}"
+                          SelectedItem="{Binding FilterCode}" Margin="0,4,0,4" HorizontalAlignment="Left" MinWidth="120"/>
+
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="AAVSO Observer Code:" VerticalAlignment="Center" Margin="0,4,10,4"/>
+                <TextBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding AavsoObserverCode}" Margin="0,4,0,4" Watermark="optional"/>
+            </Grid>
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="'Look Up RA/Dec' queries AAVSO VSX, then NASA Exoplanet Archive, then SIMBAD, in that order, and fills in whichever resolves the name first."/>
+
+            <TextBlock Classes="hint" Text="{Binding Status}" Margin="0,8,0,0"/>
+
+            <!-- Animated bar while the Target RA/Dec lookup is querying VSX/NEA/SIMBAD -->
+            <ProgressBar IsIndeterminate="True"
+                         IsVisible="{Binding IsLookingUp}"
+                         Height="4"
+                         Margin="0,2,0,0"/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

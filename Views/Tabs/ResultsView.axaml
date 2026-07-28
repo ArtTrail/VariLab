@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VariLab.ViewModels"
+             xmlns:ctrl="using:VariLab.Views.Controls"
+             x:DataType="vm:ResultsViewModel"
+             x:Class="VariLab.Views.Tabs.ResultsView">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="16" Spacing="14">
+
+            <TextBlock Classes="h2" Text="Results — Period Search &amp; Export"/>
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="Runs automatically as soon as Photometry finishes. AAVSO Extended Format, Stellar Variability PNG, and an Excel report are saved automatically too — no export button needed. A CompDiagnostics subfolder is also written alongside them, with one CSV (JD/Mag/Weight/Airmass/Flux/PeakADU/Background/FWHM_X/FWHM_Y/FWHM_Mean) and one quick-look PNG per star — the target plus every comp — for checking whether a light curve's trend is isolated to one comp or shared across the ensemble."/>
+
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="Min period (d):" VerticalAlignment="Center"/>
+                    <NumericUpDown Value="{Binding MinPeriodDays}" Minimum="0.001" Maximum="1000" Increment="0.01" Width="170" FormatString="F3"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="Max period (d):" VerticalAlignment="Center"/>
+                    <NumericUpDown Value="{Binding MaxPeriodDays}" Minimum="0.001" Maximum="1000" Increment="0.1" Width="170" FormatString="F3"/>
+                </StackPanel>
+                <Button Classes="primary" Content="Re-run Period Search" Command="{Binding RunCommand}"/>
+            </StackPanel>
+
+            <TextBlock Classes="hint" Text="{Binding Status}" TextWrapping="Wrap"/>
+            <TextBlock Classes="hint" Text="{Binding Summary}" TextWrapping="Wrap" IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+            <TextBlock Classes="h2" Text="Light Curve" Margin="0,8,0,0"/>
+            <ctrl:ScatterPlotControl Height="220" Points="{Binding LightCurvePoints}"
+                                     XLabel="JD − JD0 (days)" YLabel="Mag" InvertY="True"/>
+
+            <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,8,0,0">
+                <TextBlock Classes="h2" Text="Phase-Folded Light Curve" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="Fold period (d):" VerticalAlignment="Center"/>
+                    <NumericUpDown Value="{Binding FoldPeriod}" Minimum="0.0001" Maximum="1000" Increment="0.001" Width="195" FormatString="F5"/>
+                </StackPanel>
+                <Button Classes="toolbar" Content="Fold" Command="{Binding FoldCommand}"/>
+            </StackPanel>
+            <ctrl:ScatterPlotControl Height="220" Points="{Binding PhaseFoldedPoints}"
+                                     XLabel="Phase" YLabel="Mag" InvertY="True"/>
+
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
+                <Button Classes="toolbar" Content="View Stellar Variability PNG" Command="{Binding ViewPngCommand}"
+                        IsEnabled="{Binding LastVariabilityPngPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

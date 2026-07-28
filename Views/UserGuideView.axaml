@@ -1,0 +1,172 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="VariLab.Views.UserGuideView">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+
+        <StackPanel Spacing="6" Margin="32,20,32,24">
+
+            <TextBlock Classes="title" Text="VariLab User Guide" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,4"
+                       Text="VariLab is a standalone desktop tool for processing stellar variability data — light curves for variable stars, eclipsing binaries, or any target where you want a magnitude-vs-time series rather than a transit fit. It takes a folder of pre-calibrated, plate-solved FITS frames (VariLab does not do dark/bias/flat calibration or frame registration itself — that must already be done, e.g. in NINA, PixInsight, or FITS Calibrator) and produces a differential-photometry light curve, a period search, and export files ready for AAVSO submission or further analysis."/>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,12"
+                       Text="VariLab shares its comparison-star selection method (&quot;Stone method,&quot; see below) and several core services with TransitLab, and is intended to eventually fold into a future TransitLab version as a variability-analysis mode."/>
+
+            <!-- ── Table of Contents ────────────────────────────────────────── -->
+            <TextBlock Classes="h2" Text="Table of Contents" Margin="0,0,0,4"/>
+            <StackPanel Margin="0,0,0,12" Spacing="0">
+                <HyperlinkButton Content="1. Workflow Overview" Click="OnTocClick" Tag="1" Padding="0" HorizontalAlignment="Left"/>
+                <HyperlinkButton Content="2. Data Tab" Click="OnTocClick" Tag="2" Padding="0" HorizontalAlignment="Left"/>
+                <HyperlinkButton Content="3. Comp Stars Tab — the Stone Method (incl. Pre-flight Checks)" Click="OnTocClick" Tag="3" Padding="0" HorizontalAlignment="Left"/>
+                <HyperlinkButton Content="4. Photometry Tab" Click="OnTocClick" Tag="4" Padding="0" HorizontalAlignment="Left"/>
+                <HyperlinkButton Content="5. Results Tab" Click="OnTocClick" Tag="5" Padding="0" HorizontalAlignment="Left"/>
+                <HyperlinkButton Content="6. Known Limitations" Click="OnTocClick" Tag="6" Padding="0" HorizontalAlignment="Left"/>
+                <HyperlinkButton Content="Appendix: Sources for AAVSO-related design decisions" Click="OnTocClick" Tag="Appendix" Padding="0" HorizontalAlignment="Left"/>
+            </StackPanel>
+
+            <!-- ── 1. Workflow ─────────────────────────────────────────────── -->
+            <TextBlock x:Name="Section1" Classes="h2" Text="1. Workflow Overview" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="VariLab has four tabs, used in order:" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="1. Data — point to your input folder and identify the target" Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="2. Comp Stars — automatically select comparison stars (the Stone method)" Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="3. Photometry — extract the differential light curve across all frames" Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="4. Results — search for periodicity, view plots, export" Margin="0,0,0,12"/>
+
+            <!-- ── 2. Data tab ─────────────────────────────────────────────── -->
+            <TextBlock x:Name="Section2" Classes="h2" Text="2. Data Tab" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Text="Target Directory" Margin="0,0,0,0"/>
+            <TextBlock TextWrapping="Wrap" Classes="hint" Text="Folder of FITS frames — must be pre-calibrated and pre-plate-solved (valid WCS in each file). All frames should be the same filter — VariLab does not currently separate frames by filter, so a folder with mixed bands will produce a meaningless mixed-band light curve. As soon as a valid folder is set, VariLab reads the first FITS file's header for OBJECT and FILTER and auto-fills Target Name and Filter below — then automatically runs the RA/Dec lookup. Pointing this at a new folder clears the Comp Stars, Photometry, and Results tabs — selected comps, the light curve, and period-search output from whatever dataset was open before are reset, so they can't be mistaken for results from the new one." Margin="0,0,0,8"/>
+            <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Text="Output Directory" Margin="0,0,0,0"/>
+            <TextBlock TextWrapping="Wrap" Classes="hint" Text="Where the VariLab_ResultsN export folders (AAVSO .txt, Stellar Variability .png, Excel report) are saved. Defaults to match Target Directory whenever it changes, so exports normally land right next to the source frames with no extra setup. Browse to a different folder here to save exports somewhere else instead — once you do, it stops auto-following Target Directory, so it's safe to switch datasets afterward without it snapping back." Margin="0,0,0,8"/>
+            <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Text="Target Name" Margin="0,0,0,0"/>
+            <TextBlock TextWrapping="Wrap" Classes="hint" Text="The star's designation (e.g. V0338 Cen, KELT-8). Used for the AAVSO export's #NAME field and as the title on exported plots. Auto-filled from the FITS header's OBJECT keyword when a Target Directory is set — a trailing lowercase exoplanet-letter suffix is stripped (e.g. KELT-8 b → KELT-8, TOI-4463 A b → TOI-4463 A, keeping the uppercase host-star component letter). Edit it manually any time. Trust this over the FITS header if they disagree — see the Comp Stars tab's &quot;Target not in frame&quot; check below for a real case where a stale OBJECT header pointed VariLab at the wrong star entirely." Margin="0,0,0,8"/>
+            <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Text="Target RA / Target Dec" Margin="0,0,0,0"/>
+            <TextBlock TextWrapping="Wrap" Classes="hint" Text="The target's sky position. Accepts decimal degrees (213.9153) or sexagesimal (14:15:39.7 for RA, -47:28:46 for Dec) — enter either format directly, whatever your source data gives you. Auto-filled once Target Name is populated (see Look Up RA/Dec below)." Margin="0,0,0,8"/>
+            <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Text="Look Up RA/Dec button" Margin="0,0,0,0"/>
+            <TextBlock TextWrapping="Wrap" Classes="hint" Text="Enter a Target Name and click this to auto-fill RA/Dec. It queries, in order: AAVSO VSX (variable star index) → NASA Exoplanet Archive (host star or planet name) → SIMBAD (general object database, resolves almost any common designation). The first catalog that recognizes the name wins; the status line reports which one matched and under what name. This same lookup runs automatically right after Target Name is auto-filled from a FITS header." Margin="0,0,0,8"/>
+            <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Text="Filter" Margin="0,0,0,0"/>
+            <TextBlock TextWrapping="Wrap" Classes="hint" Text="The observation's filter band. Matters for comp-star magnitude lookups — pick the one that actually matches your images. Auto-filled from the FITS header's FILTER keyword when a Target Directory is set. Required — Comp Star Selection refuses to run without one selected (blank, or a FITS header value that doesn't match any option in the dropdown, both block with a status message telling you to pick one here first)." Margin="0,0,0,8"/>
+            <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Text="AAVSO Observer Code" Margin="0,0,0,0"/>
+            <TextBlock TextWrapping="Wrap" Classes="hint" Text="Your AAVSO observer code, written into the #OBSCODE field of AAVSO exports. Optional but needed for a real AAVSO submission." Margin="0,0,0,12"/>
+
+            <!-- ── 3. Comp Stars tab ───────────────────────────────────────── -->
+            <TextBlock x:Name="Section3" Classes="h2" Text="3. Comp Stars Tab — the Stone Method" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
+                       Text="This is the most important step: VariLab needs a set of comparison stars with known magnitudes to turn raw target flux into a calibrated differential magnitude. This selection process is called the Stone method, named for Geoff Stone, author of the CompStarSelector / exotic-proto project this logic was ported from (native C#, no Python/Docker dependency). The same method is already used inside TransitLab for exoplanet transit work."/>
+
+            <TextBlock FontWeight="SemiBold" Text="Pre-flight checks" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="Before spending any time on catalog queries, Comp Star Selection checks two things and stops with a dialog if either fails:" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="• Plate solve required — if fewer than half the frames in the Target Directory have a WCS solution, there's nothing for the pipeline to project comp stars onto. Plate-solve the dataset first (Astrometry.net is recommended for small/undersampled formats like MObs's 650×500, where ASTAP's quad-matching is unreliable)." Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="• Target not in frame — the resolved target position is checked against the reference frame's own plate solution. If it's more than a degree (or three frame-widths, whichever is larger) away from where the frame is actually centered, a dialog reports both positions and the separation, then stops. This catches a real failure mode: a FITS OBJECT header left over from a different target earlier in the same imaging session (the frame is correctly plate-solved and really is pointing somewhere else — the header is just wrong). Without this check, the pipeline used to run its full ~15–90s Gaia/APASS/VSP/GSPC sequence and only fail much later with an opaque &quot;0 candidates in frame&quot; — this catches it immediately and says why. If you hit this, check Target Name/RA/Dec on the Data tab against what this dataset actually is, and consider that other frames in the same folder may have the same stale header." Margin="0,0,0,8"/>
+
+            <TextBlock FontWeight="SemiBold" Text="What it queries, and why" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="1. Gaia DR3 — one cone search around the target, returning every field star brighter than a magnitude limit. This is the base candidate pool." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="2. AAVSO VSP (Variable Star Plotter) — AAVSO's own vetted comparison-star sequences, when one exists for the field. Always queried alongside Gaia." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="3. APASS DR9 — an all-sky photometric survey (Johnson B/V, Sloan g'/r'/i'), used to fill in magnitudes for Gaia-only candidates." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="4. Gaia GSPC synthetic photometry — Gaia's own synthetic magnitudes derived from its low-resolution spectra, generally the most precise catalog source available (~0.005–0.015 mag)." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="5. AAVSO VSX (Variable Star Index) — cross-checked against every candidate to hard-exclude any star within 5&quot; of a known variable (a bad comp star is one that varies itself)." Margin="0,0,0,8"/>
+
+            <TextBlock FontWeight="SemiBold" Text="Selection criteria" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="Candidates are scored and ranked on:" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="• Color match (Gaia BP−RP close to the target's) — most important when color match is possible, since mismatched colors introduce differential atmospheric extinction over the course of a night" Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="• Magnitude similarity — stars brighter than the target get full credit; dimmer stars are penalized on a sliding scale" Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="• Astrometric quality (Gaia RUWE &lt; 1.4 — a well-behaved single-star solution)" Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="• Isolation — excluded if a brighter neighbor is too close (the exclusion radius scales with the neighbor's brightness)" Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="• Centrality in the field of view" Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="• A +0.10 bonus for AAVSO VSP stars, since they're independently vetted" Margin="0,0,0,8"/>
+
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
+                       Text="After scoring, candidates are checked for PSF quality directly on the image (not just from catalog data): rejected if saturated, low SNR (&lt;75), an outlier FWHM vs. the field median, or an elongated PSF (blended star). Rejected candidates are automatically replaced from the backfill pool, for up to 3 passes."/>
+
+            <TextBlock FontWeight="SemiBold" Text="Magnitude assignment — priority chain" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="Each comp star's actual magnitude value comes from one of four sources, tried in this order:" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="1. VSP — AAVSO's own vetted sequence value. Preferred first not because it's necessarily the most numerically precise, but because it's the shared reference every other observer submitting data for this star uses — that consistency matters more for the AAVSO International Database than shaving a few millimagnitudes." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="2. GSPC synthetic photometry (~0.005–0.015 mag accuracy)" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="3. APASS DR9 (~0.02–0.05 mag accuracy)" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="4. G→V — a hardcoded Gaia G-band → Johnson V polynomial conversion (Evans et al. 2018), used only as a last resort when nothing else matches. This is the one source that ignores your actual observation filter (it always estimates V), so if you're shooting in a non-V filter and a comp star falls through to this tier, its magnitude may not perfectly match your bandpass. The pipeline log and the Comp Stars grid show MagSource per star so you can see when this happened." Margin="0,0,0,8"/>
+
+            <TextBlock FontWeight="SemiBold" Text="Controls" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="• Max comp stars (1–25, default 10) — AAVSO's own guidance suggests 12–20 when the field supports it; the default of 10 is reasonable for typical fields but you can raise it for dense fields or lower it for sparse ones." Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="• Run executes the Stone method against the first FITS frame in the input directory (used only as a reference frame — the actual photometry pass in the next tab re-projects every comp star through each frame's own WCS)." Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="• The Pipeline Log panel shows the full step-by-step trace (Gaia/VSP/APASS query results, scoring weights, PSF pass/fail per star) — check this first if a run produces &quot;No candidates&quot; or an unexpectedly small ensemble." Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="• One combined grid shows every candidate — a green ✓ marks a selected comp, a red ✗ marks one that was rejected during PSF validation, with the specific reason in the last column." Margin="0,0,0,12"/>
+
+            <!-- ── 4. Photometry tab ───────────────────────────────────────── -->
+            <TextBlock x:Name="Section4" Classes="h2" Text="4. Photometry Tab" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="Runs multi-frame differential photometry using the comp ensemble from the previous tab:" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="1. Aperture sizing — determined once from the reference frame's measured target FWHM (aperture = 1.7×FWHM, sky annulus 3–5×FWHM), then held fixed across every frame. A size that adapted per-frame would inject spurious flux changes into the light curve that have nothing to do with real variability. The FWHM measurement itself only counts flux that exceeds the local sky background by a noise-based threshold (2σ over a robust sky sigma) — at low target SNR, ordinary background noise scattered across the measurement window would otherwise get counted as signal and inflate the computed FWHM, producing a badly oversized aperture." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="2. Per-frame photometry — for every FITS file, the target and every comp star's sky position is re-projected through that frame's own WCS (not reused from the reference frame), then refined to the actual local intensity centroid before the fixed aperture is measured. This guards against plate solves that are only accurate to a few pixels (e.g. ASTAP on some undersampled formats) and against real frame-to-frame drift — without it, a small but consistent centering error clips real target flux every frame, with no redundancy to average it out the way the multi-star comp ensemble has." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="3. Per-comp magnitude estimate — target_mag = comp_mag − 2.5·log10(target_flux / comp_flux) for each comp star independently." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="4. Ensemble bias correction — different comp stars' magnitude sources (VSP vs. GSPC vs. APASS vs. G→V) can disagree with each other by a small, constant amount across the whole run — that's a catalog calibration difference, not noise. VariLab estimates each comp's own median offset from the ensemble consensus (over all frames) and removes it before combining, so the reported error reflects genuine per-frame measurement noise rather than inter-catalog disagreement." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="5. Weighted-median combination — the final magnitude for each frame is the bias-corrected, SNR-weighted median across all comps; the uncertainty is the weighted MAD across comps (or a photon-limited estimate if only one comp was usable that frame)." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="6. Sigma-clipping — outlier frames (3σ, 2 passes) are flagged rejected rather than deleted, so you can still see them in the frame-by-frame grid." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="7. Centroid-drift rejection — the local-centroid refinement in step 2 is a flux-weighted centroid over a search window around the WCS-projected position, so if a much brighter star happens to fall inside that window, it can dominate the weighted average and pull the centroid mostly or entirely onto itself instead of the real target — this was confirmed in a dense cluster field, where a Gaia neighbor only 4.4&quot; away and ~2.2 mag brighter corrupted about 65% of a target's frames with a bogus, much-brighter reading that alternated with the real one from frame to frame. Any frame (or individual comp star) whose refined centroid moves more than 6px from its WCS-projected starting point is now rejected rather than trusted — this is checked separately for the target and for each comp star, and also applied to the one-time reference-frame FWHM measurement that sizes the aperture for the whole run. This only ever matters when a bright neighbor falls within the centroid search radius, which in practice means dense or cluster fields — an isolated target's centroid should never legitimately drift anywhere near 6px, so this is invisible in normal use. Rejected frames show up in the frame-by-frame grid with reason &quot;target centroid drifted N.Npx from WCS position&quot;." Margin="0,0,0,12"/>
+
+            <!-- ── 5. Results tab ──────────────────────────────────────────── -->
+            <TextBlock x:Name="Section5" Classes="h2" Text="5. Results Tab" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="• Runs automatically as soon as Photometry finishes — no button click needed. A native Lomb-Scargle periodogram (generalized/floating-mean formulation, Zechmeister &amp; Kürster 2009 — the same one astropy.timeseries.LombScargle implements by default) finds a best-fit period over the Min/Max period range; the periodogram curve itself isn't shown, since a single night's search is only a local diagnostic (short-timescale signals like pulsators or flares) — genuine long-period variability detection is what AAVSO's archive-scale, multi-observer analysis is for, not a single VariLab session. The best period and its power are reported in the summary line instead." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="• Phase folding — folds the light curve at the best-fit period, or any period you type in manually (useful for checking aliases, e.g. half or double the detected period). Re-run Period Search after changing the min/max range or fold period." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="• Two plots: Light Curve and Phase-Folded Light Curve — rendered in a plain matplotlib-style look (white background, tomato error bars) matching the style of EXOTIC's own Stellar_Variability.png output." Margin="0,0,0,8"/>
+
+            <TextBlock FontWeight="SemiBold" Text="Exports (automatic)" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="All files below are saved automatically the moment the period search completes — no export button needed. Each run is saved into its own numbered VariLab_ResultsN subfolder of the Target Directory from the Data tab (VariLab_Results1, VariLab_Results2, VariLab_Results3, ...) — the next unused number is picked automatically each time, so separate runs never mix their files together. Each filename also still carries its own {yyyyMMdd_HHmmss} timestamp, and the Status line reports exactly where the files were saved." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="• AAVSO Extended Format (.txt) — ready for AAVSO WebObs upload. Uses CNAME=ENSEMBLE (AAVSO's documented convention when there's no single comp star to name) and TRANS=NO (VariLab does not compute transformation coefficients). The NOTES field lists every ensemble comp star used, and automatically flags a meridian (pier) flip if the FITS PIERSIDE header changes mid-run (e.g. &quot;Meridian flip detected (pier West -&gt; East at JD ...)&quot;) — the magnitudes/errors themselves are never altered, only noted, per AAVSO's guidance to submit data as measured." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="• Stellar Variability (.png) — a single magnitude-vs-JD plot in the EXOTIC visual style, for sharing or quick reference. Use the &quot;View Stellar Variability PNG&quot; button to open the most recently saved one in-app." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="• Excel Report (.xlsx) — a four-sheet workbook: Data (every accepted frame's JD, magnitude, error, and airmass), Comp Stars (full detail on the selected ensemble — position, magnitude, source, FWHM, SNR, Gaia ID, AUID, separation, color, RUWE), Rejected Comps (candidates that failed PSF validation, with the specific reason), and Plots (the Light Curve and Phase-Folded chart images embedded directly in the workbook)." Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="• CompDiagnostics (subfolder) — one CSV and one quick-look PNG light curve per star, the target plus every comp: JD, Mag, Weight, Airmass, Flux, PeakADU, Background, FWHM_X, FWHM_Y, FWHM_Mean. Mag/Weight are the same bias-corrected per-comp values that feed the weighted-median combination on the Photometry tab; Flux/PeakADU/Background are the same aperture-photometry values already computed for the main pipeline; FWHM_X/FWHM_Y come from an added per-frame PSF moment measurement, kept separate rather than averaged since a directional PSF elongation (e.g. from differential chromatic refraction) would be washed out by an isotropic mean. All filtered to the same accepted frames as the main light curve, so every file lines up frame-for-frame with the rest of the export and with each other. Meant for diagnosing a light curve trend that doesn't have an obvious cause — is it isolated to one comp star, shared across the whole ensemble, or does it track a real PSF/seeing change over the session?" Margin="0,0,0,12"/>
+
+            <!-- ── 6. Limitations ──────────────────────────────────────────── -->
+            <TextBlock x:Name="Section6" Classes="h2" Text="6. Known Limitations" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Text="• No per-filter frame separation — point the Target Directory at a single-filter folder." Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="• No calibration or frame-registration pipeline — frames must already be calibrated and plate-solved." Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="• No transformation-coefficient computation (raw differential photometry only, TRANS=NO)." Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="• No variable-star sequence generator (for fields with no existing AAVSO chart)." Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="• Single target per run; one-shot batch processing only (no live-monitor mode)." Margin="0,0,0,2"/>
+            <TextBlock TextWrapping="Wrap" Text="• Period-search uncertainty is not formally estimated — only the best period and its power are reported." Margin="0,0,0,12"/>
+
+            <!-- ── Appendix: Sources ────────────────────────────────────────── -->
+            <TextBlock x:Name="SectionAppendix" Classes="h2" Text="Appendix: Sources for AAVSO-related design decisions" Margin="0,0,0,4"/>
+            <TextBlock TextWrapping="Wrap" Classes="hint" Margin="0,0,0,8"
+                       Text="Several of VariLab's design choices are based on AAVSO's own published guidance rather than assumption. Each claim below links to the source it came from, so any decision here can be independently checked."/>
+
+            <TextBlock TextWrapping="Wrap" Text="Magnitude priority chain (VSP → GSPC → APASS → G→V): &quot;Always use the VSP values for comparison stars unless you have experience... and good familiarity with the available photometric catalogs.&quot;" Margin="0,0,0,2"/>
+            <HyperlinkButton NavigateUri="https://www.aavso.org/sites/default/files/publications/Uncertainty-V9.pdf" Padding="0" Margin="0,0,0,10">AAVSO Guide to Photometric Uncertainty</HyperlinkButton>
+
+            <TextBlock TextWrapping="Wrap" Text="Ensemble size guidance (12–20 comps typical; Kent Honeycutt uses every star in frame if properly weighted) — informs VariLab's 1–25 range, default 10." Margin="0,0,0,2"/>
+            <HyperlinkButton NavigateUri="https://www.aavso.org/sites/default/files/publications/Uncertainty-V9.pdf" Padding="0" Margin="0,0,0,10">AAVSO Guide to Photometric Uncertainty</HyperlinkButton>
+
+            <TextBlock TextWrapping="Wrap" Text="G→V polynomial conversion (last-resort magnitude source, used only when no VSP/GSPC/APASS value exists) — Evans et al. 2018, A&amp;A 616, A4." Margin="0,0,0,2"/>
+            <HyperlinkButton NavigateUri="https://www.aanda.org/articles/aa/full_html/2018/08/aa32756-18/aa32756-18.html" Padding="0" Margin="0,0,0,10">Evans et al. 2018 — Gaia DR2 Photometric Content and Validation</HyperlinkButton>
+
+            <TextBlock TextWrapping="Wrap" Text="CNAME=ENSEMBLE, CMAG=na is AAVSO's documented, permitted convention for ensemble photometry." Margin="0,0,0,2"/>
+            <HyperlinkButton NavigateUri="https://www.aavso.org/comparison-star-and-check-star-labels-when-submitting-observations" Padding="0" Margin="0,0,0,0">Comparison star and check star labels when submitting observations</HyperlinkButton>
+            <HyperlinkButton NavigateUri="https://www.aavso.org/transforming-ensembles" Padding="0" Margin="0,0,0,10">Transforming Ensembles</HyperlinkButton>
+
+            <TextBlock TextWrapping="Wrap" Text="Ensemble submissions should list which comp stars were used (AUID or chart label) in the NOTES field, since the Extended Format record itself carries no per-comp detail." Margin="0,0,0,2"/>
+            <HyperlinkButton NavigateUri="https://www.aavso.org/comparison-star-and-check-star-labels-when-submitting-observations" Padding="0" Margin="0,0,0,10">Comparison star and check star labels when submitting observations</HyperlinkButton>
+
+            <TextBlock TextWrapping="Wrap" Text="NOTES field supports several thousand characters — no truncation risk from listing a full comp ensemble." Margin="0,0,0,2"/>
+            <HyperlinkButton NavigateUri="https://www.aavso.org/aavso-extended-file-format" Padding="0" Margin="0,0,0,10">AAVSO Extended File Format</HyperlinkButton>
+
+            <TextBlock TextWrapping="Wrap" Text="Non-VSP comp stars (APASS, Gaia, VizieR/ATLAS refcat2) are an AAVSO-endorsed alternative when no official VSP sequence exists for a field, not a workaround." Margin="0,0,0,2"/>
+            <HyperlinkButton NavigateUri="https://www.aavso.org/what-do-if-no-aavso-comp-stars" Padding="0" Margin="0,0,0,10">What to do if no AAVSO Comp Stars</HyperlinkButton>
+
+            <TextBlock TextWrapping="Wrap" Text="TRANS=NO (no transformation coefficients) is standard, accepted practice for this citizen-science exoplanet-host workflow — confirmed directly against a real EXOTIC 4.3.1 AAVSO submission file (NASA/JPL Exoplanet Watch's own pipeline), which also submits TRANS=NO. General AAVSO preference for transformed data, for context, is linked below." Margin="0,0,0,2"/>
+            <HyperlinkButton NavigateUri="https://www.aavso.org/use-transformation-coefficients" Padding="0" Margin="0,0,0,10">Use of transformation coefficients</HyperlinkButton>
+
+            <TextBlock TextWrapping="Wrap" Text="AAVSO's own period-analysis tool (VStar) is built around DCDFT, not literally &quot;Lomb-Scargle&quot; by name — but DCDFT and the Generalized/floating-mean Lomb-Scargle periodogram (what VariLab implements) are mathematically equivalent least-squares sinusoid+constant fits." Margin="0,0,0,2"/>
+            <HyperlinkButton NavigateUri="https://www.aavso.org/time-series-tutorial" Padding="0" Margin="0,0,0,0">Time Series Tutorial</HyperlinkButton>
+            <HyperlinkButton NavigateUri="https://www.aavso.org/sites/default/files/jaavso/v40n2/852.pdf" Padding="0" Margin="0,0,0,10">Benn 2012 — Algorithms + Observations = VStar (JAAVSO 40, 852)</HyperlinkButton>
+
+            <TextBlock TextWrapping="Wrap" Text="Lomb-Scargle period-search algorithm (generalized/floating-mean formulation) implemented natively in Services/PeriodSearchService.cs — Zechmeister &amp; Kürster 2009, A&amp;A 496, 577." Margin="0,0,0,2"/>
+            <HyperlinkButton NavigateUri="https://www.aanda.org/articles/aa/full_html/2009/11/aa11296-08/aa11296-08.html" Padding="0" Margin="0,0,0,10">The generalised Lomb-Scargle periodogram</HyperlinkButton>
+
+            <TextBlock TextWrapping="Wrap" Text="FILT export mapping for filters with no valid AAVSO ShortName (L→CV, C→CV, CBB→CR, Rc→R, Ic→I) — confirmed L isn't an accepted ShortName, and that AAVSO's own documented practice for Luminance/Clear/CBB imaging is to submit as CV or CR referenced to whichever comp-star band was used." Margin="0,0,0,2"/>
+            <HyperlinkButton NavigateUri="https://vsx.aavso.org/index.php?view=api.bands" Padding="0" Margin="0,0,0,0">Filter Band ShortNames API</HyperlinkButton>
+            <HyperlinkButton NavigateUri="https://www.aavso.org/how-submit-and-measure-images-clear-or-luminance-filter" Padding="0" Margin="0,0,0,0">How to submit and measure images with a clear or luminance filter?</HyperlinkButton>
+            <HyperlinkButton NavigateUri="https://www.aavso.org/luminance-filter" Padding="0" Margin="0,0,0,4">Luminance filter</HyperlinkButton>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

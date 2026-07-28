@@ -1,0 +1,24 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="VariLab.Views.PlateSolveRequiredDialog"
+        Title="Plate Solve Required"
+        Width="520"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+
+    <StackPanel Margin="24,20,24,20" Spacing="14">
+
+        <TextBlock Classes="h2" TextWrapping="Wrap" Text="These frames aren't plate-solved"/>
+
+        <TextBlock x:Name="MessageText" TextWrapping="Wrap"/>
+
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="VariLab needs a WCS solution on each frame to locate the target and comparison stars — without it, photometry can't run. Plate-solve this dataset first (Astrometry.net is recommended for small/undersampled frames such as MObs's 650×500 format, where ASTAP's quad-matching is unreliable), then point VariLab at the solved frames."/>
+
+        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button x:Name="OkButton" Classes="primary" Content="OK"/>
+        </StackPanel>
+
+    </StackPanel>
+</Window>

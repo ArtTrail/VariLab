@@ -1,0 +1,27 @@
+# .NET build artifacts
+bin/
+obj/
+publish/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+
+# NuGet
+*.nupkg
+packages/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+VariLab_diagnostics_log_*.txt
+
+# Distributables / dev screenshots — not source
+*.zip
+Screenshot *.png

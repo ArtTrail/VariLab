@@ -1,0 +1,24 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="VariLab.Views.TargetNotInFrameDialog"
+        Title="Target Not In Frame"
+        Width="520"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+
+    <StackPanel Margin="24,20,24,20" Spacing="14">
+
+        <TextBlock Classes="h2" TextWrapping="Wrap" Text="Target doesn't fall within this frame"/>
+
+        <TextBlock x:Name="MessageText" TextWrapping="Wrap"/>
+
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="This usually means the FITS OBJECT header doesn't match what the telescope was actually pointing at (e.g. a stale target name left over from an earlier target in the same imaging session) — not a problem with VariLab's target lookup. Check the Target Name/RA/Dec on the Data tab against this dataset, and consider that other frames in this folder may have the same mislabeling. Comp Star Selection was not run."/>
+
+        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button x:Name="OkButton" Classes="primary" Content="OK"/>
+        </StackPanel>
+
+    </StackPanel>
+</Window>

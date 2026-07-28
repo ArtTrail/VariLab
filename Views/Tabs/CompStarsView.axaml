@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VariLab.ViewModels"
+             xmlns:dg="using:Avalonia.Controls"
+             x:DataType="vm:CompStarsViewModel"
+             x:Class="VariLab.Views.Tabs.CompStarsView">
+
+    <DockPanel Margin="16">
+
+        <StackPanel DockPanel.Dock="Top" Spacing="12">
+            <TextBlock Classes="h2" Text="Comp Star Selection"/>
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="Runs Gaia DR3 + AAVSO VSP + APASS DR9 + GSPC comp-star selection (Geoff Stone's method) against the first FITS frame in the input directory, using the target RA/Dec entered on the Data tab."/>
+
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="Max comp stars:" VerticalAlignment="Center"/>
+                <NumericUpDown Value="{Binding MaxCompStars}" Minimum="1" Maximum="25" Width="110"/>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Classes="primary" Content="Run" Command="{Binding RunCommand}" IsEnabled="{Binding !IsRunning}"/>
+                <Button Classes="toolbar" Content="Cancel" Command="{Binding CancelCommand}" IsEnabled="{Binding IsRunning}"/>
+                <TextBlock Classes="hint" Text="{Binding Status}" VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Animated bar while comp stars are being queried -->
+            <ProgressBar IsIndeterminate="True"
+                         IsVisible="{Binding IsRunning}"
+                         Height="4"
+                         Margin="4,2,4,4"/>
+        </StackPanel>
+
+        <Border DockPanel.Dock="Bottom" Height="220" BorderBrush="{StaticResource BrushSep}" BorderThickness="1" Margin="0,0,0,8">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <TextBox Text="{Binding Log}" IsReadOnly="True" AcceptsReturn="True"
+                         FontFamily="Consolas,Courier New,monospace" FontSize="13"
+                         BorderThickness="0" Background="Transparent"/>
+            </ScrollViewer>
+        </Border>
+        <TextBlock DockPanel.Dock="Bottom" Classes="h2" Text="Pipeline Log" Margin="0,12,0,4"/>
+
+        <TextBlock DockPanel.Dock="Top" Classes="h2" Text="Comp Stars (green = selected, red = rejected)" Margin="0,0,0,4"/>
+        <dg:DataGrid Margin="0,0,0,0" ItemsSource="{Binding Rows}" AutoGenerateColumns="False" IsReadOnly="True">
+            <dg:DataGrid.Styles>
+                <Style Selector="DataGridColumnHeader TextBlock">
+                    <Setter Property="FontSize" Value="16.5"/>
+                </Style>
+            </dg:DataGrid.Styles>
+            <dg:DataGrid.Columns>
+                <dg:DataGridTemplateColumn Header="">
+                    <dg:DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="vm:CompRow">
+                            <TextBlock Text="{Binding StatusGlyph}" FontWeight="Bold" FontSize="14.5" HorizontalAlignment="Center"
+                                       Classes.ok="{Binding Selected}" Classes.err="{Binding !Selected}"/>
+                        </DataTemplate>
+                    </dg:DataGridTemplateColumn.CellTemplate>
+                </dg:DataGridTemplateColumn>
+                <!-- Mode=OneWay everywhere below: DataGridTextColumn.Binding defaults to TwoWay
+                     (same as WPF) regardless of the DataGrid's own IsReadOnly, and will otherwise
+                     write the rendered, rounded display text back into the bound record — see
+                     PhotometryView.axaml for the full story on this Avalonia/WPF DataGrid gotcha. -->
+                <dg:DataGridTextColumn Header="X"        Binding="{Binding X, Mode=OneWay}"        FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="Y"        Binding="{Binding Y, Mode=OneWay}"        FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="Mag"      Binding="{Binding Mag, Mode=OneWay, StringFormat={}{0:F2}}"      FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="Mag Src"  Binding="{Binding MagSource, Mode=OneWay}" FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="Filter"   Binding="{Binding FilterBand, Mode=OneWay}" FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="FWHM px"  Binding="{Binding FwhmPx, Mode=OneWay, StringFormat={}{0:F2}}"   FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="SNR"      Binding="{Binding Snr, Mode=OneWay, StringFormat={}{0:F2}}"      FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="Source"   Binding="{Binding CatalogSource, Mode=OneWay}" FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="Sep (arcsec)"  Binding="{Binding SepArcsec, Mode=OneWay, StringFormat={}{0:F2}}" FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="BP-RP"    Binding="{Binding BpRp, Mode=OneWay, StringFormat={}{0:F4}}"     FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="RUWE"     Binding="{Binding Ruwe, Mode=OneWay, StringFormat={}{0:F4}}"     FontSize="14.5"/>
+                <dg:DataGridTextColumn Header="Reason (if rejected)" Binding="{Binding Reason, Mode=OneWay}" Width="*" FontSize="14.5"/>
+            </dg:DataGrid.Columns>
+        </dg:DataGrid>
+
+    </DockPanel>
+</UserControl>

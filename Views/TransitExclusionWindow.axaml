@@ -1,0 +1,34 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:VariLab.Views.Controls"
+        x:Class="VariLab.Views.TransitExclusionWindow"
+        Title="Exclude Transit"
+        Width="900"
+        Height="620"
+        MinWidth="600"
+        MinHeight="420"
+        WindowStartupLocation="CenterOwner">
+
+    <DockPanel Margin="20">
+
+        <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12">
+            <TextBlock Classes="h2" Text="Exclude Transit"/>
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="Drag across the transit dip (or any range) to mark those frames excluded from variability stats, the period search, and the AAVSO/Excel export. Drag again for another range, or over an already-excluded range to un-exclude it."/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="10"
+                    HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button x:Name="ClearButton"  Classes="toolbar" Content="Clear"/>
+            <Button x:Name="CancelButton" Classes="toolbar" Content="Cancel"/>
+            <Button x:Name="AcceptButton" Classes="primary" Content="Accept"/>
+        </StackPanel>
+
+        <Border BorderBrush="#444" BorderThickness="1">
+            <controls:VariabilityChartControl x:Name="Chart"
+                                               DrawLine="False"
+                                               XLabel="Time [JD]"/>
+        </Border>
+
+    </DockPanel>
+</Window>

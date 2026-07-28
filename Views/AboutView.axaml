@@ -1,0 +1,135 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="VariLab.Views.AboutView">
+
+    <Border Padding="36,28,36,28">
+        <StackPanel Spacing="0">
+
+            <!-- App name + version -->
+            <TextBlock Classes="title"
+                       Text="VariLab"
+                       HorizontalAlignment="Center"/>
+            <TextBlock x:Name="VersionText"
+                       Classes="hint"
+                       HorizontalAlignment="Center"
+                       Margin="0,4,0,0"/>
+
+            <!-- Copyright + license -->
+            <TextBlock Classes="hint"
+                       Text="© Art Trail 2026"
+                       HorizontalAlignment="Center"
+                       Margin="0,4,0,0"/>
+            <TextBlock Classes="hint"
+                       Text="Standalone stellar-variability companion to TransitLab"
+                       HorizontalAlignment="Center"
+                       Margin="0,2,0,0"/>
+
+            <!-- Separator -->
+            <Rectangle Height="1"
+                       Fill="{StaticResource BrushSep}"
+                       Margin="0,18,0,18"/>
+
+            <!-- Author -->
+            <TextBlock Text="Author"
+                       FontWeight="SemiBold"
+                       HorizontalAlignment="Center"/>
+            <TextBlock Text="Art Trail"
+                       HorizontalAlignment="Center"
+                       Margin="0,4,0,2"/>
+
+            <!-- Development note -->
+            <TextBlock TextWrapping="Wrap"
+                       Classes="hint"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       FontStyle="Italic"
+                       Margin="0,10,0,0"
+                       Text="Developed entirely with Claude Code (Anthropic), with the exception of the Stone comp-star method contributed by Geoff Stone."/>
+
+            <!-- Separator -->
+            <Rectangle Height="1"
+                       Fill="{StaticResource BrushSep}"
+                       Margin="0,18,0,18"/>
+
+            <!-- Acknowledgements -->
+            <TextBlock Text="Acknowledgements"
+                       FontWeight="SemiBold"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,12"/>
+
+            <!-- Geoff Stone -->
+            <TextBlock TextWrapping="Wrap"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Text="Geoff Stone — the Stone Method"/>
+            <TextBlock TextWrapping="Wrap"
+                       Classes="hint"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Margin="0,2,0,10"
+                       Text="Comparison-star selection pipeline (CompStarSelector / exotic-proto), used with permission&#x0a;github.com/geofstone/exotic-proto"/>
+
+            <!-- AAVSO -->
+            <TextBlock TextWrapping="Wrap"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Text="AAVSO — American Association of Variable Star Observers"/>
+            <TextBlock TextWrapping="Wrap"
+                       Classes="hint"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Margin="0,2,0,10"
+                       Text="VSP, VSX, Extended Format submission standard, and observing resources&#x0a;aavso.org"/>
+
+            <!-- Gaia -->
+            <TextBlock TextWrapping="Wrap"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Text="Gaia DR3 (ESA)"/>
+            <TextBlock TextWrapping="Wrap"
+                       Classes="hint"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Margin="0,2,0,10"
+                       Text="Astrometry, photometry, and GSPC synthetic photometry&#x0a;gea.esac.esa.int"/>
+
+            <!-- NASA Exoplanet Archive -->
+            <TextBlock TextWrapping="Wrap"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Text="NASA Exoplanet Archive"/>
+            <TextBlock TextWrapping="Wrap"
+                       Classes="hint"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Margin="0,2,0,10"
+                       Text="Exoplanet host-star coordinate resolution&#x0a;exoplanetarchive.ipac.caltech.edu"/>
+
+            <!-- SIMBAD -->
+            <TextBlock TextWrapping="Wrap"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Text="SIMBAD (CDS, Strasbourg Astronomical Data Center)"/>
+            <TextBlock TextWrapping="Wrap"
+                       Classes="hint"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Margin="0,2,0,10"
+                       Text="General astronomical object coordinate resolution&#x0a;simbad.u-strasbg.fr"/>
+
+            <!-- Lomb-Scargle -->
+            <TextBlock TextWrapping="Wrap"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Text="Period Search Algorithm"/>
+            <TextBlock TextWrapping="Wrap"
+                       Classes="hint"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Margin="0,2,0,0"
+                       Text="Zechmeister &amp; Kürster (2009, A&amp;A 496, 577) — generalized Lomb-Scargle periodogram"/>
+
+        </StackPanel>
+    </Border>
+
+</UserControl>

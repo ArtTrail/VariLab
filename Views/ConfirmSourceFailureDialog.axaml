@@ -1,0 +1,25 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="VariLab.Views.ConfirmSourceFailureDialog"
+        Title="Data Source Failed"
+        Width="520"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+
+    <StackPanel Margin="24,20,24,20" Spacing="14">
+
+        <TextBlock x:Name="HeadingText" Classes="h2" TextWrapping="Wrap"/>
+
+        <TextBlock x:Name="MessageText" TextWrapping="Wrap"/>
+
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="Continuing will select comp stars from whatever sources did respond, which may mean a smaller or less-vetted ensemble than usual. Cancelling stops the search here — nothing is selected."/>
+
+        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button x:Name="CancelButton" Classes="toolbar" Content="Cancel Search"/>
+            <Button x:Name="ContinueButton" Classes="primary" Content="Continue Anyway"/>
+        </StackPanel>
+
+    </StackPanel>
+</Window>
