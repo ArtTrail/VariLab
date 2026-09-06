@@ -29,6 +29,7 @@ future TransitLab version as a variability-analysis mode.
    - [Exports](#exports)
 6. [Known limitations](#6-known-limitations)
 7. [Appendix: Sources for AAVSO-related design decisions](#appendix-sources-for-aavso-related-design-decisions)
+8. [Appendix: From Python to C# — How VariLab Was Built](#appendix-from-python-to-c--how-varilab-was-built)
 
 ---
 
@@ -310,4 +311,72 @@ any decision here can be independently checked rather than taken on faith.
 | `TRANS=NO` (no transformation coefficients) is standard, accepted practice for this citizen-science exoplanet-host workflow — confirmed directly against a real EXOTIC 4.3.1 AAVSO submission file (NASA/JPL Exoplanet Watch's own pipeline), which also submits `TRANS=NO` | User-provided file: `AID_AAVSO_Qatar-1_20-JUN-2026.txt`. General AAVSO preference for transformed data, for context: [Use of transformation coefficients](https://www.aavso.org/use-transformation-coefficients) |
 | AAVSO's own period-analysis tool (VStar) is built around DCDFT, not literally "Lomb-Scargle" by name — but DCDFT and the Generalized/floating-mean Lomb-Scargle periodogram (what VariLab implements) are mathematically equivalent least-squares sinusoid+constant fits | [Time Series Tutorial](https://www.aavso.org/time-series-tutorial), Benn, D., 2012, "Algorithms + Observations = VStar," *JAAVSO* 40, [852](https://www.aavso.org/sites/default/files/jaavso/v40n2/852.pdf) |
 | Lomb-Scargle period-search algorithm (generalized/floating-mean formulation) implemented natively in `Services/PeriodSearchService.cs` | Zechmeister, M. & Kürster, M. 2009, "The generalised Lomb-Scargle periodogram," *A&A* 496, 577 — [full text](https://www.aanda.org/articles/aa/full_html/2009/11/aa11296-08/aa11296-08.html) |
+
+---
+
+## Appendix: From Python to C# — How VariLab Was Built
+
+A shorter, more informal note than the rest of this guide — the story of what's native
+C# vs. what's still Python under the hood, and what actually got tested along the way,
+for anyone curious rather than just looking up how to use a field.
+
+### The Python heritage
+
+VariLab's algorithms trace back to a Python scientific-computing lineage — the same one
+TransitLab and its underlying EXOTIC pipeline are built on. Comp-star selection descends
+from Geoff Stone's CompStarSelector/exotic-proto project; period search follows the same
+generalized Lomb-Scargle formulation `astropy.timeseries.LombScargle` implements by
+default. Rather than run that Python code directly (which would mean shipping a Python
+interpreter and a stack of scientific packages just to run a few thousand lines of
+logic), most of it was rewritten from scratch as native C# — reading the original
+algorithm, then reimplementing its math directly in the app's own language, rather than
+translating line-by-line.
+
+### What's native C# (no Python at all)
+
+- Comp-star selection (the Stone method) — Gaia DR3/VSP/APASS/GSPC queries, scoring,
+  isolation checks
+- Aperture photometry — sizing, per-frame centroiding, ensemble combination,
+  sigma-clipping
+- Period search — the generalized/floating-mean Lomb-Scargle periodogram and phase
+  folding
+- FITS header parsing and WCS (sky-to-pixel/pixel-to-sky) math
+
+### What's still real Python — PSF Fit mode
+
+PSF Fit is the one exception, and deliberately so: photutils' empirical-PSF (ePSF)
+fitting is a mature, extensively-used implementation that would take a great deal of
+work to reproduce faithfully in C#, for a feature that's genuinely optional (Aperture
+mode alone covers most use cases). Instead, PSF Fit runs a small bundled Python script
+(astropy, photutils, numpy, scipy) inside its own isolated virtual environment under
+`%AppData%\VariLab\pyenv` — installed automatically the first time PSF Fit is used (a
+one-time "PSF Engine Setup" step), invoked as a background subprocess per run, never
+requiring you to already have Python installed. Everything upstream of it (frame
+selection, comp-star list, WCS) and downstream of it (ensemble combination, export)
+stays C# — Python's involvement is scoped to exactly the one algorithm that benefits
+from it.
+
+### What actually got tested
+
+- **Lomb-Scargle**: validated by formulation, not just by running it — the
+  generalized/floating-mean variant implemented here is the same one
+  `astropy.timeseries.LombScargle` uses by default (Zechmeister & Kürster 2009), not a
+  simpler classical periodogram that would give subtly different power values.
+- **PSF Fit vs. Aperture**: cross-checked end-to-end on a real, isolated target
+  (V1655 Cen) — mean magnitude and amplitude agreed to within ~0.01 mag, and PSF Fit
+  additionally recovered 4 frames Aperture mode had rejected outright.
+- **A real limitation this testing found, not a theoretical one**: on a target with a
+  genuinely close, bright neighbor (a few arcsec), simultaneous PSF fitting can land on
+  a plausible-looking but wrong flux split between the two stars — confirmed on two real
+  cases (V1786 Cen, V1615 Cen), both showing amplitude inflated well above their known
+  VSX reference values, and not something photutils' own fit-quality flags reliably
+  catch. This is a structural property of simultaneous PSF fitting on blended sources,
+  not a bug in this app or in photutils — the correct tool for that specific case is
+  difference-image analysis (DIA), which VariLab doesn't implement.
+- **Real bugs, found on real data, not synthetic test cases**: an unrelated bright Gaia
+  neighbor silently oversizing the whole run's aperture (KELT-8); a nearby bright star
+  hijacking the target's own centroid in a dense cluster field; and, during a routine
+  speed audit, a completely unrelated discovery that AAVSO had quietly moved two of the
+  URLs this app's own comp-star pipeline depends on, silently degrading every affected
+  run for some time before anyone noticed.
 | `FILT` export mapping for filters with no valid AAVSO ShortName (`L`→`CV`, `C`→`CV`, `CBB`→`CR`, `Rc`→`R`, `Ic`→`I`) — confirmed `L` isn't an accepted ShortName, and that AAVSO's own documented practice for Luminance/Clear/CBB imaging is to submit as CV or CR referenced to whichever comp-star band was used | [Filter Band ShortNames API](https://vsx.aavso.org/index.php?view=api.bands), [How to submit and measure images with a clear or luminance filter?](https://www.aavso.org/how-submit-and-measure-images-clear-or-luminance-filter), [Luminance filter](https://www.aavso.org/luminance-filter) |
