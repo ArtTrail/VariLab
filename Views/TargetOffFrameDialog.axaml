@@ -1,0 +1,24 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="VariLab.Views.TargetOffFrameDialog"
+        Title="Target Off Frame"
+        Width="520"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+
+    <StackPanel Margin="24,20,24,20" Spacing="14">
+
+        <TextBlock Classes="h2" TextWrapping="Wrap" Text="Target doesn't fall on this frame's actual pixel data"/>
+
+        <TextBlock x:Name="MessageText" TextWrapping="Wrap"/>
+
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="This is different from a mismatched pointing — the target's resolved RA/Dec is close enough to this frame's center to pass that check, but its projected pixel position still falls outside the real image (with a 5% edge margin), so there's no actual pixel data there to measure. Most likely this dataset simply doesn't cover this target's exact position, even though it covers the surrounding field well enough to still find comparison stars. Comp Star Selection was not run."/>
+
+        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button x:Name="OkButton" Classes="primary" Content="OK"/>
+        </StackPanel>
+
+    </StackPanel>
+</Window>

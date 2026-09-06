@@ -29,6 +29,12 @@
                     MinWidth="80"/>
         </StackPanel>
 
+        <TextBlock DockPanel.Dock="Bottom"
+                   Text="{Binding Status}"
+                   Classes="hint"
+                   IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                   Margin="2,6,0,0"/>
+
         <!-- Log title -->
         <TextBlock DockPanel.Dock="Top"
                    Text="{Binding LogTitle}"
@@ -45,20 +51,21 @@
                      ItemsSource="{Binding LogLines}"
                      Background="Transparent"
                      BorderThickness="0"
-                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      ScrollViewer.VerticalScrollBarVisibility="Auto">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <TextBlock Text="{Binding}"
                                    FontFamily="Consolas,Courier New,monospace"
                                    FontSize="13"
-                                   TextWrapping="NoWrap"/>
+                                   TextWrapping="Wrap"/>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
                 <ListBox.Styles>
                     <Style Selector="ListBoxItem">
                         <Setter Property="Padding" Value="2,0"/>
                         <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                     </Style>
                 </ListBox.Styles>
             </ListBox>

@@ -26,6 +26,8 @@
 
             <TextBlock Classes="hint" Text="{Binding Status}" TextWrapping="Wrap"/>
             <TextBlock Classes="hint" Text="{Binding Summary}" TextWrapping="Wrap" IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+            <TextBlock Text="{Binding CrowdingFlagsSummary}" TextWrapping="Wrap" FontWeight="Bold" Foreground="#c98a00"
+                       IsVisible="{Binding CrowdingFlagsSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 
             <TextBlock Classes="h2" Text="Light Curve" Margin="0,8,0,0"/>
             <ctrl:ScatterPlotControl Height="220" Points="{Binding LightCurvePoints}"

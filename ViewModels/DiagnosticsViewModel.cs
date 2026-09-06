@@ -29,6 +29,7 @@ public partial class DiagnosticsViewModel : ViewModelBase
     public Action?              CloseCallback   { get; set; }
 
     [ObservableProperty] private string _logTitle = "Current Session";
+    [ObservableProperty] private string _status = "";
     private bool _viewingPrevious;
 
     // ── Live feed ─────────────────────────────────────────────────────────────
@@ -73,8 +74,16 @@ public partial class DiagnosticsViewModel : ViewModelBase
         if (SaveFileFunc is null) return;
         var path = await SaveFileFunc();
         if (path is null) return;
-        try { await File.WriteAllTextAsync(path, string.Join(Environment.NewLine, LogLines)); }
-        catch { }
+        try
+        {
+            await File.WriteAllTextAsync(path, string.Join(Environment.NewLine, LogLines));
+            Status = $"✓  Saved to {path}";
+        }
+        catch (Exception ex)
+        {
+            Status = $"✗  Could not save log: {ex.Message}";
+            SessionLogService.Write($"[Diagnostics] SaveLog to '{path}' failed: {ex}");
+        }
     }
 
     [RelayCommand]
@@ -92,8 +101,13 @@ public partial class DiagnosticsViewModel : ViewModelBase
             LogTitle = Path.GetFileName(path);
             foreach (var line in text.Split('\n'))
                 LogLines.Add(line.TrimEnd('\r'));
+            Status = $"✓  Loaded {Path.GetFileName(path)}";
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Status = $"✗  Could not load '{Path.GetFileName(path)}': {ex.Message}";
+            SessionLogService.Write($"[Diagnostics] LoadPreviousLog from '{path}' failed: {ex}");
+        }
     }
 
     [RelayCommand]

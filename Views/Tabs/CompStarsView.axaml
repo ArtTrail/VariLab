@@ -18,9 +18,11 @@
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="10">
-                <Button Classes="primary" Content="Run" Command="{Binding RunCommand}" IsEnabled="{Binding !IsRunning}"/>
+                <Button Classes="primary" Content="Run" Command="{Binding RunCommand}" IsEnabled="{Binding CanRunNow}"/>
                 <Button Classes="toolbar" Content="Cancel" Command="{Binding CancelCommand}" IsEnabled="{Binding IsRunning}"/>
                 <TextBlock Classes="hint" Text="{Binding Status}" VerticalAlignment="Center"/>
+                <TextBlock Classes="hint" Text="{Binding ElapsedText, StringFormat='Elapsed: {0}'}" VerticalAlignment="Center"
+                           IsVisible="{Binding ElapsedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
             </StackPanel>
 
             <!-- Animated bar while comp stars are being queried -->
@@ -28,18 +30,22 @@
                          IsVisible="{Binding IsRunning}"
                          Height="4"
                          Margin="4,2,4,4"/>
+
+            <TextBlock Text="{Binding TargetNeighborWarning}" TextWrapping="Wrap" FontWeight="Bold"
+                       Foreground="#c98a00"
+                       IsVisible="{Binding TargetNeighborWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
         </StackPanel>
 
         <Border DockPanel.Dock="Bottom" Height="220" BorderBrush="{StaticResource BrushSep}" BorderThickness="1" Margin="0,0,0,8">
             <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                <TextBox Text="{Binding Log}" IsReadOnly="True" AcceptsReturn="True"
+                <TextBox x:Name="LogTextBox" Text="{Binding Log}" IsReadOnly="True" AcceptsReturn="True"
                          FontFamily="Consolas,Courier New,monospace" FontSize="13"
                          BorderThickness="0" Background="Transparent"/>
             </ScrollViewer>
         </Border>
         <TextBlock DockPanel.Dock="Bottom" Classes="h2" Text="Pipeline Log" Margin="0,12,0,4"/>
 
-        <TextBlock DockPanel.Dock="Top" Classes="h2" Text="Comp Stars (green = selected, red = rejected)" Margin="0,0,0,4"/>
+        <TextBlock DockPanel.Dock="Top" Classes="h2" Text="Comp Stars (checked = selected — uncheck to exclude from Photometry, red ✗ = rejected by the pipeline)" Margin="0,0,0,4"/>
         <dg:DataGrid Margin="0,0,0,0" ItemsSource="{Binding Rows}" AutoGenerateColumns="False" IsReadOnly="True">
             <dg:DataGrid.Styles>
                 <Style Selector="DataGridColumnHeader TextBlock">
@@ -47,11 +53,21 @@
                 </Style>
             </dg:DataGrid.Styles>
             <dg:DataGrid.Columns>
+                <!-- Selected rows: an interactive checkbox (issue #4 — de-select a comp without
+                     removing it from the list; unchecking excludes it from Photometry, checking
+                     it back in restores it). Rejected rows: the original static "✗", unchanged
+                     — those were already excluded by the pipeline itself, not user-toggleable. -->
                 <dg:DataGridTemplateColumn Header="">
                     <dg:DataGridTemplateColumn.CellTemplate>
                         <DataTemplate x:DataType="vm:CompRow">
-                            <TextBlock Text="{Binding StatusGlyph}" FontWeight="Bold" FontSize="14.5" HorizontalAlignment="Center"
-                                       Classes.ok="{Binding Selected}" Classes.err="{Binding !Selected}"/>
+                            <Panel>
+                                <CheckBox IsChecked="{Binding IsIncluded, Mode=TwoWay}"
+                                          IsVisible="{Binding Selected}"
+                                          HorizontalAlignment="Center"/>
+                                <TextBlock Text="✗" FontWeight="Bold" FontSize="14.5" HorizontalAlignment="Center"
+                                           Classes="err"
+                                           IsVisible="{Binding !Selected}"/>
+                            </Panel>
                         </DataTemplate>
                     </dg:DataGridTemplateColumn.CellTemplate>
                 </dg:DataGridTemplateColumn>
@@ -59,6 +75,7 @@
                      (same as WPF) regardless of the DataGrid's own IsReadOnly, and will otherwise
                      write the rendered, rounded display text back into the bound record — see
                      PhotometryView.axaml for the full story on this Avalonia/WPF DataGrid gotcha. -->
+                <dg:DataGridTextColumn Header="Comp"     Binding="{Binding Label, Mode=OneWay}"    FontSize="14.5"/>
                 <dg:DataGridTextColumn Header="X"        Binding="{Binding X, Mode=OneWay}"        FontSize="14.5"/>
                 <dg:DataGridTextColumn Header="Y"        Binding="{Binding Y, Mode=OneWay}"        FontSize="14.5"/>
                 <dg:DataGridTextColumn Header="Mag"      Binding="{Binding Mag, Mode=OneWay, StringFormat={}{0:F2}}"      FontSize="14.5"/>

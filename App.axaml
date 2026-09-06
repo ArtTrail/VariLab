@@ -63,6 +63,12 @@
             <Setter Property="FontSize"   Value="17"/>
             <Setter Property="Foreground" Value="{StaticResource BrushErr}"/>
         </Style>
+        <!-- Compound selector: overrides only Foreground, keeping "hint"'s own FontSize/Italic —
+             for a status line that's normally hint-styled but needs to turn red on failure
+             without also jumping in size the way plain .err would. -->
+        <Style Selector="TextBlock.hint.err">
+            <Setter Property="Foreground" Value="{StaticResource BrushErr}"/>
+        </Style>
 
         <!-- ── Input controls ─────────────────────────────────────────────── -->
         <Style Selector="TextBox">
@@ -107,6 +113,21 @@
             <Setter Property="CornerRadius" Value="4"/>
         </Style>
         <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource BrushBtnHov}"/>
+        </Style>
+
+        <!-- ── Floating round action button ("back to top") ──────────────────── -->
+        <Style Selector="Button.fab">
+            <Setter Property="Background" Value="{StaticResource BrushBtn}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushFg}"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="CornerRadius" Value="24"/>
+            <Setter Property="Width" Value="48"/>
+            <Setter Property="Height" Value="48"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="Button.fab:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource BrushBtnHov}"/>
         </Style>
 

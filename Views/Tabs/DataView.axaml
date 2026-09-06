@@ -48,7 +48,7 @@
             <TextBlock Classes="hint" TextWrapping="Wrap"
                        Text="'Look Up RA/Dec' queries AAVSO VSX, then NASA Exoplanet Archive, then SIMBAD, in that order, and fills in whichever resolves the name first."/>
 
-            <TextBlock Classes="hint" Text="{Binding Status}" Margin="0,8,0,0"/>
+            <TextBlock Classes="hint" Classes.err="{Binding LookupFailed}" Text="{Binding Status}" Margin="0,8,0,0"/>
 
             <!-- Animated bar while the Target RA/Dec lookup is querying VSX/NEA/SIMBAD -->
             <ProgressBar IsIndeterminate="True"

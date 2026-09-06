@@ -119,4 +119,52 @@ public static class PeriodSearchService
         }
         return points.OrderBy(p => p.X).ToList();
     }
+
+    /// <summary>Per-frame residual from a binned phase-folded curve, in the same order as the
+    /// input jd/mag arrays (unlike <see cref="PhaseFold"/>, which duplicates/reorders points
+    /// for plotting). Bins the [0,1) phase range into <paramref name="nBins"/> and subtracts
+    /// each bin's median magnitude from every point in it — a coarse, assumption-light stand-in
+    /// for a real light-curve template fit, just enough to detrend real periodic variability
+    /// before checking whether what's left still correlates with something else (seeing —
+    /// see CrowdingFlagService). An empty bin's points pass through with a zero residual rather
+    /// than being dropped, since a sparse fold shouldn't silently shrink the sample being
+    /// correlated.</summary>
+    public static double[] PhaseResiduals(
+        IReadOnlyList<double> jd, IReadOnlyList<double> mag, double period, double epoch, int nBins = 25)
+    {
+        int n = jd.Count;
+        var residuals = new double[n];
+        if (n == 0 || period <= 0 || nBins < 1) return residuals;
+
+        var phases  = new double[n];
+        var binMags = new List<double>[nBins];
+        for (int b = 0; b < nBins; b++) binMags[b] = [];
+
+        for (int i = 0; i < n; i++)
+        {
+            double phase = (jd[i] - epoch) / period;
+            phase -= Math.Floor(phase);
+            phases[i] = phase;
+            int bin = Math.Clamp((int)(phase * nBins), 0, nBins - 1);
+            binMags[bin].Add(mag[i]);
+        }
+
+        var binMedian = new double[nBins];
+        for (int b = 0; b < nBins; b++)
+            binMedian[b] = binMags[b].Count > 0 ? Median(binMags[b]) : double.NaN;
+
+        for (int i = 0; i < n; i++)
+        {
+            int bin = Math.Clamp((int)(phases[i] * nBins), 0, nBins - 1);
+            residuals[i] = double.IsNaN(binMedian[bin]) ? 0.0 : mag[i] - binMedian[bin];
+        }
+        return residuals;
+    }
+
+    private static double Median(List<double> values)
+    {
+        var sorted = values.OrderBy(v => v).ToList();
+        int mid = sorted.Count / 2;
+        return sorted.Count % 2 == 0 ? (sorted[mid - 1] + sorted[mid]) / 2.0 : sorted[mid];
+    }
 }

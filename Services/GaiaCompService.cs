@@ -141,10 +141,11 @@ public static class GaiaCompService
     public record CompResult(
         List<(int X, int Y)>     Pairs,
         string                   StatusMessage,
-        bool                     GaiaUsed = false,
-        List<CompStarInfo>?      Stars    = null,
-        ImageQualityInfo?        Quality  = null,
-        List<RejectedCompInfo>?  Rejected = null);
+        bool                     GaiaUsed              = false,
+        List<CompStarInfo>?      Stars                 = null,
+        ImageQualityInfo?        Quality               = null,
+        List<RejectedCompInfo>?  Rejected              = null,
+        string?                  TargetNeighborWarning = null);
 
     // ── Internal candidate model ──────────────────────────────────────────────
 
@@ -231,6 +232,7 @@ public static class GaiaCompService
         int                 maxCompStars = 10,
         Func<string, string, Task<bool>>? confirmOnSourceFailure = null,
         Func<double, double, double, double, double, double, Task>? notifyTargetNotInFrame = null,
+        Func<double, double, int, int, int, int, Task>? notifyTargetOffFrame = null,
         CancellationToken   ct           = default)
     {
         // Asks the user (via confirmOnSourceFailure, if wired) whether to keep going after a
@@ -319,8 +321,62 @@ public static class GaiaCompService
             return new CompResult([], "✗  Target not in frame — check Target Name/RA/Dec on the Data tab");
         }
 
-        // ── Gaia DR3 field query ──────────────────────────────────────────────
+        // ── Target pixel-bounds check ───────────────────────────────────────────
+        // The check above only catches a target whose ANGULAR separation from the frame center
+        // is large (a wildly wrong pointing, e.g. a stale header) — it never verifies the
+        // target's own projected pixel position actually falls on real image data, the way
+        // every comp candidate independently is a few steps below (the inFrame filter's own
+        // margin test). Confirmed on a real case (V1455 Cen): a target only ~3.5' outside this
+        // frame's real edge passed the angular check easily (comfortably inside its generous
+        // few-frame-widths tolerance), and comp selection still succeeded — the Gaia cone search
+        // is centered on the TARGET's own position with a wide radius, so it still pulled in
+        // real candidates from well inside the frame (9-11' away). But the target itself had no
+        // real pixel data at its position (Target PSF measured FWHM=0/SNR=0/peak=0), and every
+        // subsequent Photometry frame was rejected — a run that looked like it worked (10 good
+        // comps selected) but silently couldn't have produced a light curve. Checking the
+        // target's own position against the same real-bounds test here fails fast with a clear
+        // reason instead.
+        if (naxis1 > 0 && naxis2 > 0 && targetXPx.HasValue && targetYPx.HasValue)
+        {
+            int tMarginX = Math.Max(20, (int)(naxis1 * 0.05));
+            int tMarginY = Math.Max(20, (int)(naxis2 * 0.05));
+            if (targetXPx.Value < tMarginX || targetXPx.Value > naxis1 - tMarginX ||
+                targetYPx.Value < tMarginY || targetYPx.Value > naxis2 - tMarginY)
+            {
+                Log($"[Stone] ✗  Target projects to pixel ({targetXPx},{targetYPx}) — outside this " +
+                    $"{naxis1}×{naxis2} frame's real bounds (5% edge margin). Close enough to the " +
+                    "pointing to pass the coarser center-separation check, but no real pixel data " +
+                    "at that position.", logProgress);
+                if (notifyTargetOffFrame is not null)
+                    await notifyTargetOffFrame(targetRa, targetDec, targetXPx.Value, targetYPx.Value, naxis1, naxis2);
+                return new CompResult([],
+                    "✗  Target falls outside this frame's real pixel bounds — this dataset may not cover this target's field");
+            }
+        }
+
+        // ── Fire Gaia / VSP / VSX / APASS concurrently ─────────────────────────
+        // All four are independent network round-trips that only need the target's own
+        // RA/Dec/FOV/filter, not each other's results — VSP's magnitude limit used to narrow
+        // slightly once Gaia's own G-band match for the target was known (see the old
+        // `(targetGMag ?? 14.0) + 2.0` calculation this replaces), but that was only ever a
+        // minor response-size tuning, not a correctness dependency, so it's traded here for
+        // starting all four at once instead of waiting on Gaia first. Verified via a scratch
+        // console test against the real Gaia/VSP/VSX/APASS endpoints (2026-09-06): identical
+        // results either way, ~3.9x faster wall-clock for this stage. Results are still
+        // consumed and logged one at a time below, in the same Step 1/2/3 order as before, so
+        // the pipeline log and per-source "continue anyway?" prompts read exactly as they did
+        // sequentially.
         const double MagFloor = 17.0;
+        double vspMagLimitEarly = Math.Min(MagFloor, 16.0);
+
+        var gaiaTask  = QueryGaiaAsync(targetRa, targetDec, fovRadiusDeg * 1.1, MagFloor, progress, ct);
+        var vspTask   = useVsp
+            ? QueryVspAsync(targetRa, targetDec, fovArcmin, filterCode, vspMagLimitEarly, ct)
+            : Task.FromResult<(List<GaiaCandidate> Stars, string Message, bool Failed)>(([], "", false));
+        var vsxTask   = QueryVsxAsync(targetRa, targetDec, fovRadiusDeg * 1.1, MagFloor, ct);
+        var apassTask = QueryApassAsync(targetRa, targetDec, fovArcmin * 1.1, filterCode, ct);
+
+        // ── Gaia DR3 field query ──────────────────────────────────────────────
         List<GaiaCandidate>? gaiaTable = null;
         bool   gaiaOk    = false;
         string gaiaError = "";
@@ -331,8 +387,7 @@ public static class GaiaCompService
 
         try
         {
-            gaiaTable = await QueryGaiaAsync(
-                targetRa, targetDec, fovRadiusDeg * 1.1, MagFloor, progress, ct);
+            gaiaTable = await gaiaTask;
             gaiaOk = gaiaTable?.Count > 0;
             Log(gaiaOk
                 ? $"[Stone]   Result: {gaiaTable!.Count} field stars"
@@ -384,6 +439,49 @@ public static class GaiaCompService
             else
             {
                 Log($"[Stone]   Target not found in Gaia catalog within 30\" — color matching DISABLED", logProgress);
+            }
+        }
+
+        // ── Target neighbor pre-flight check ──────────────────────────────────
+        // Comp candidates are isolation-checked below (a bad one is simply dropped and another
+        // picked instead) — the target itself never goes through the same test, since it can't
+        // be swapped out. Applies the identical isolation standard already used for comps, just
+        // against the target's own position, so a run heading into unreliable territory is
+        // flagged before Photometry spends minutes on it rather than discovered afterward via a
+        // discrepant amplitude — confirmed the hard way on V1786 Cen (4.4", 2.2 mag brighter)
+        // and V1615 Cen, both of which would have tripped this check immediately. Non-blocking:
+        // unlike a rejected comp candidate, there's no fallback target to try instead.
+        string? targetNeighborWarning = null;
+        if (gaiaOk && gaiaTable is not null)
+        {
+            int    tgtNstars       = hdr?.GetInt("NSTARS") ?? 0;
+            double tgtIsoThreshold = tgtNstars > 500 ? 10.0 : 15.0;
+
+            GaiaCandidate? worstNeighbor = null;
+            double         worstExcess   = 0;
+            foreach (var nb in gaiaTable)
+            {
+                if (!nb.GMag.HasValue) continue;
+                double nbSep = SepArcsec(targetRa, targetDec, nb.Ra, nb.Dec);
+                if (nbSep < 0.5) continue;   // the target's own Gaia match
+                double diff = 12.0 - nb.GMag.Value;
+                double excl = diff > 0 ? tgtIsoThreshold + diff * 30.0 : tgtIsoThreshold;
+                if (nbSep >= excl) continue;
+                double excess = excl - nbSep;
+                if (worstNeighbor is null || excess > worstExcess) { worstNeighbor = nb; worstExcess = excess; }
+            }
+
+            if (worstNeighbor is not null)
+            {
+                double sep  = SepArcsec(targetRa, targetDec, worstNeighbor.Ra, worstNeighbor.Dec);
+                double dMag = targetGMag.HasValue ? worstNeighbor.GMag!.Value - targetGMag.Value : double.NaN;
+                targetNeighborWarning =
+                    $"⚠ Target has a Gaia neighbor {sep:F1}\" away" +
+                    (double.IsNaN(dMag) ? "" : dMag < 0 ? $" ({-dMag:F1} mag brighter)" : $" ({dMag:F1} mag fainter)") +
+                    " — closer than this pipeline's own comp-star isolation standard. Reliable " +
+                    "deblending is unlikely at this seeing regardless of photometry method; " +
+                    "consider PSF Fit mode, or treat amplitude/mean-mag results here with caution.";
+                Log($"[Stone]   {targetNeighborWarning}", logProgress);
             }
         }
 
@@ -463,7 +561,8 @@ public static class GaiaCompService
         }
 
         // ── VSP query (optional) ──────────────────────────────────────────────
-        double vspMagLimit = Math.Min(MagFloor, (targetGMag ?? 14.0) + 2.0);
+        // vspMagLimitEarly (fired above, before Gaia's own targetGMag match was known) is used
+        // here only for the log line — the actual query was already issued with it.
         List<GaiaCandidate> vspCandidates = [];
         string vspMsg = "";
         bool vspFailed = false;
@@ -471,9 +570,8 @@ public static class GaiaCompService
         {
             Log($"[Stone]", logProgress);
             Log($"[Stone] ── Step 2/8: AAVSO VSP query ────────────────────────────────────", logProgress);
-            Log($"[Stone]   FOV: {fovArcmin:F1}'  |  maglim: {vspMagLimit:F1}  |  Filter: {filterCode}", logProgress);
-            (vspCandidates, vspMsg, vspFailed) = await QueryVspAsync(
-                targetRa, targetDec, fovArcmin, filterCode, vspMagLimit, ct);
+            Log($"[Stone]   FOV: {fovArcmin:F1}'  |  maglim: {vspMagLimitEarly:F1}  |  Filter: {filterCode}", logProgress);
+            (vspCandidates, vspMsg, vspFailed) = await vspTask;
             Log($"[Stone]   Result: {vspMsg}", logProgress);
 
             if (vspFailed)
@@ -537,8 +635,7 @@ public static class GaiaCompService
         var vsxVariables = new List<(double Ra, double Dec, string Name)>();
         try
         {
-            vsxVariables = await QueryVsxAsync(
-                targetRa, targetDec, fovRadiusDeg * 1.1, MagFloor, ct);
+            vsxVariables = await vsxTask;
             Log($"[Stone]   VSX: {vsxVariables.Count} known variable{(vsxVariables.Count == 1 ? "" : "s")} in field", logProgress);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -594,8 +691,7 @@ public static class GaiaCompService
         bool apassFailed = false;
         try
         {
-            (apassStars, apassMsg, apassFailed) = await QueryApassAsync(
-                targetRa, targetDec, fovArcmin * 1.1, filterCode, ct);
+            (apassStars, apassMsg, apassFailed) = await apassTask;
             Log($"[Stone]   Result: {apassMsg}", logProgress);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -1209,7 +1305,8 @@ public static class GaiaCompService
         Log($"[Stone]    Total elapsed: {_sw.Elapsed.TotalSeconds:F1}s", logProgress);
         Log($"[Stone] ══════════════════════════════════════════════════════════", logProgress);
 
-        return new CompResult(pairs, msg, GaiaUsed: gaiaOk, Stars: stars, Quality: quality, Rejected: rejected);
+        return new CompResult(pairs, msg, GaiaUsed: gaiaOk, Stars: stars, Quality: quality, Rejected: rejected,
+            TargetNeighborWarning: targetNeighborWarning);
     }
 
     // ── Gaia DR3 TAP query ────────────────────────────────────────────────────
@@ -1503,7 +1600,10 @@ public static class GaiaCompService
             return ([], $"Filter '{filterCode}' not in VSP — using Gaia only", false);
 
         double fov = Math.Clamp(fovArcmin * 1.2, 10.0, 90.0);
-        string url = $"https://www.aavso.org/apps/vsp/api/chart/?ra={targetRa:F6}&dec={targetDec:F6}" +
+        // Same AAVSO subdomain move as QueryVsxAsync above — www.aavso.org/apps/vsp/... now
+        // redirects through a Cloudflare bot-challenge; apps.aavso.org/vsp/... (no "/apps"
+        // prefix on this host) is the working replacement, confirmed live 2026-09-06.
+        string url = $"https://apps.aavso.org/vsp/api/chart/?ra={targetRa:F6}&dec={targetDec:F6}" +
                      $"&fov={fov:F1}&maglimit={magLimit:F1}&format=json";
 
         string json;
@@ -1594,7 +1694,11 @@ public static class GaiaCompService
     private static async Task<List<(double Ra, double Dec, string Name)>> QueryVsxAsync(
         double ra, double dec, double radiusDeg, double magLimit, CancellationToken ct)
     {
-        string url = "https://www.aavso.org/vsx/index.php?view=api.list" +
+        // AAVSO moved VSX to vsx.aavso.org — the old www.aavso.org/vsx/... path now redirects
+        // through a Cloudflare bot-challenge no plain HTTP client can pass (confirmed live,
+        // 2026-09-06 — every call here was silently failing). Same fix TargetResolverService's
+        // own VSX lookup already got on 2026-09-04.
+        string url = "https://vsx.aavso.org/index.php?view=api.list" +
                      $"&ra={ra:F6}&dec={dec:F6}&radius={radiusDeg:F6}" +
                      $"&tomag={magLimit:F1}&format=json";
 

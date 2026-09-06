@@ -28,6 +28,10 @@ public partial class App : Application
                 Views.PlateSolveRequiredDialog.ShowAsync(mainWindow, withWcs, total);
             vm.CompStars.NotifyTargetNotInFrame = (targetRa, targetDec, frameRa, frameDec, sepDeg, fovArcmin) =>
                 Views.TargetNotInFrameDialog.ShowAsync(mainWindow, targetRa, targetDec, frameRa, frameDec, sepDeg, fovArcmin);
+            vm.CompStars.NotifyTargetOffFrame = (targetRa, targetDec, pixelX, pixelY, naxis1, naxis2) =>
+                Views.TargetOffFrameDialog.ShowAsync(mainWindow, targetRa, targetDec, pixelX, pixelY, naxis1, naxis2);
+            vm.BrowseUpdateFolderFunc = mainWindow.BrowseUpdateFolderAsync;
+            vm.ShowInfoFunc           = mainWindow.ShowInfoAsync;
 
             desktop.MainWindow = mainWindow;
         }

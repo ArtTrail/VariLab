@@ -2,8 +2,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="VariLab.Views.AboutView">
 
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
     <Border Padding="36,28,36,28">
         <StackPanel Spacing="0">
+
+            <Image Source="avares://VariLab/Assets/VariLab_logo.png" Width="120" Height="120"
+                   HorizontalAlignment="Center" Margin="0,0,0,12"/>
 
             <!-- App name + version -->
             <TextBlock Classes="title"
@@ -36,6 +40,13 @@
             <TextBlock Text="Art Trail"
                        HorizontalAlignment="Center"
                        Margin="0,4,0,2"/>
+            <TextBlock Text="art.trail@icloud.com"
+                       Classes="hint"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,2"/>
+            <TextBlock Text="github.com/ArtTrail/VariLab"
+                       Classes="hint"
+                       HorizontalAlignment="Center"/>
 
             <!-- Development note -->
             <TextBlock TextWrapping="Wrap"
@@ -126,10 +137,27 @@
                        Classes="hint"
                        HorizontalAlignment="Center"
                        TextAlignment="Center"
-                       Margin="0,2,0,0"
+                       Margin="0,2,0,10"
                        Text="Zechmeister &amp; Kürster (2009, A&amp;A 496, 577) — generalized Lomb-Scargle periodogram"/>
+
+            <!-- Separator -->
+            <Rectangle Height="1"
+                       Fill="{StaticResource BrushSep}"
+                       Margin="0,8,0,18"/>
+
+            <!-- License -->
+            <TextBlock Text="License"
+                       FontWeight="SemiBold"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,8"/>
+            <TextBlock TextWrapping="Wrap"
+                       Classes="hint"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Text="Released under the MIT License.&#x0a;See the LICENSE file included with VariLab for the full text."/>
 
         </StackPanel>
     </Border>
+    </ScrollViewer>
 
 </UserControl>

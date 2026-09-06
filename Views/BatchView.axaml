@@ -1,0 +1,86 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VariLab.ViewModels"
+             x:DataType="vm:BatchViewModel"
+             x:Class="VariLab.Views.BatchView">
+
+    <DockPanel Margin="16">
+
+        <!-- Issue #16 — scrollable, not fixed-height: when the window is dragged shorter than
+             this section's natural content height, it now scrolls instead of being squeezed by
+             the fixed-height Log panel below (which used to clip/overlap the Start/Cancel row). -->
+        <ScrollViewer DockPanel.Dock="Top" VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="10">
+            <TextBlock Classes="h2" Text="Batch Process"/>
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="Runs Comp Stars, then Photometry (and its automatic Results export) for every target below, one at a time. Uses the exact same pipeline as the main tabs — nothing here changes how a single target is analyzed."/>
+
+            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" Margin="0,4,0,0">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Input Directory:" VerticalAlignment="Center" Margin="0,0,10,4"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding InputDirectory}" Margin="0,0,8,4"
+                         ToolTip.Tip="{Binding InputDirectory}"/>
+                <Button Grid.Row="0" Grid.Column="2" Classes="toolbar" Content="Browse…" Command="{Binding BrowseInputDirectoryCommand}" Margin="0,0,0,4"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Results Directory:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ResultsDirectory}" Margin="0,0,8,0"
+                         ToolTip.Tip="{Binding ResultsDirectory}"/>
+                <Button Grid.Row="1" Grid.Column="2" Classes="toolbar" Content="Browse…" Command="{Binding BrowseResultsDirectoryCommand}"/>
+            </Grid>
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="Same folder of pre-calibrated, plate-solved FITS frames for every target in this batch. Each target gets its own subfolder here, created automatically — same idea as the Data tab's Output Directory."/>
+
+            <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto" Margin="0,4,0,0">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Filter:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding FilterOptions}"
+                          SelectedItem="{Binding FilterCode}" HorizontalAlignment="Left" MinWidth="100" Margin="0,0,16,0"/>
+                <TextBlock Grid.Row="0" Grid.Column="2" Text="Max comp stars:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <NumericUpDown Grid.Row="0" Grid.Column="3" Value="{Binding MaxCompStars}" Minimum="1" Maximum="25" Width="110" HorizontalAlignment="Left"/>
+            </Grid>
+
+            <TextBox Text="{Binding AavsoObserverCode}" Watermark="AAVSO Observer Code (optional)" HorizontalAlignment="Left" MinWidth="220"/>
+
+            <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,4,0,0">
+                <CheckBox Content="Aperture" IsChecked="{Binding RunAperture}"/>
+                <CheckBox Content="PSF Fit" IsChecked="{Binding RunPsfFit}"/>
+            </StackPanel>
+            <TextBlock Classes="hint" Text="Runs whichever are checked, for every target in the list."/>
+
+            <CheckBox Content="Pop up the results plot" IsChecked="{Binding PopUpResultsPlot}" Margin="0,4,0,0"/>
+            <TextBlock Classes="hint" Text="Opens a preview window for each result plot as it's produced. Windows stay open and cascade, rather than closing/replacing each other — off by default since a long batch can produce a lot of them."/>
+
+            <TextBlock Classes="h2" Text="Targets" Margin="0,8,0,0"/>
+            <TextBox Text="{Binding TargetsText}" AcceptsReturn="True" Height="110"
+                     Watermark="One target name per line, exactly as it would be typed into the Data tab's Target Name field (e.g. &quot;V1585 Cen&quot;)"/>
+
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Classes="toolbar" Content="Import from file…" Command="{Binding ImportFromFileCommand}"/>
+                <ComboBox ItemsSource="{Binding ImportedColumns}" SelectedItem="{Binding SelectedImportColumn}"
+                          IsVisible="{Binding ImportedColumns.Count}" MinWidth="140"/>
+                <Button Classes="toolbar" Content="Use column" Command="{Binding UseImportedColumnCommand}"
+                        IsVisible="{Binding ImportedColumns.Count}"/>
+            </StackPanel>
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="Import a CSV or XLSX instead of typing the list by hand — pick the column that holds target names and it fills in the box above (which you can still edit before starting)."/>
+
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
+                <Button Classes="primary" Content="Start" Command="{Binding StartCommand}" IsEnabled="{Binding !IsRunning}"/>
+                <Button Classes="toolbar" Content="Cancel" Command="{Binding CancelCommand}" IsEnabled="{Binding IsRunning}"/>
+                <TextBlock Classes="hint" Text="{Binding Status}" VerticalAlignment="Center"/>
+                <TextBlock Classes="hint" Text="{Binding ElapsedText, StringFormat='Elapsed: {0}'}" VerticalAlignment="Center"
+                           IsVisible="{Binding ElapsedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+            </StackPanel>
+            <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsRunning}" Height="4" Margin="0,2,0,4"/>
+        </StackPanel>
+        </ScrollViewer>
+
+        <Border DockPanel.Dock="Bottom" Height="180" BorderBrush="{StaticResource BrushSep}" BorderThickness="1" Margin="0,8,0,0">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <TextBox x:Name="LogTextBox" Text="{Binding Log}" IsReadOnly="True" AcceptsReturn="True"
+                         FontFamily="Consolas,Courier New,monospace" FontSize="13"
+                         BorderThickness="0" Background="Transparent"/>
+            </ScrollViewer>
+        </Border>
+        <TextBlock DockPanel.Dock="Bottom" Classes="h2" Text="Progress Log" Margin="0,8,0,4"/>
+
+    </DockPanel>
+</UserControl>

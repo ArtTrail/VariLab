@@ -312,7 +312,7 @@ public class VariabilityChartControl : Control
                 var px = XToPx(p.X);
                 var py = YToPx(p.Y);
                 bool isExcluded = excl is not null && i < excl.Count && excl[i];
-                var pointBrush = isExcluded ? _excludedBrush : _pointBrush;
+                var pointBrush = isExcluded ? _excludedBrush : _blackBrush;
                 var errPen     = isExcluded ? _excludedErrPen : _errPen;
 
                 if (yErr is not null && i < yErr.Count && yErr[i] > 0)
@@ -321,7 +321,7 @@ public class VariabilityChartControl : Control
                     double pyHi = YToPx(p.Y + yErr[i]);
                     ctx.DrawLine(errPen, new Point(px, pyLo), new Point(px, pyHi));
                 }
-                ctx.DrawEllipse(pointBrush, null, new Point(px, py), 1.6, 1.6);
+                ctx.DrawEllipse(pointBrush, null, new Point(px, py), 2.6, 2.6);
             }
         }
 

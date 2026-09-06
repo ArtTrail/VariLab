@@ -16,6 +16,67 @@ public partial class MainWindow : Window
         InitializeComponent();
         Title = $"VariLab v{AppVersion.Version}";
         AttributionText.Text = $"© Art Trail 2026  ·  VariLab v{AppVersion.Version}  ·  Comp-star selection via the Stone method (Geoff Stone)";
+
+        Opened += async (_, _) =>
+        {
+            if (DataContext is MainWindowViewModel vm)
+                await vm.RunStartupUpdateCheckAsync();
+        };
+    }
+
+    internal async Task<string?> BrowseUpdateFolderAsync()
+    {
+        var defaultPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var downloadsPath = System.IO.Path.Combine(defaultPath, "Downloads");
+        var startPath = System.IO.Directory.Exists(downloadsPath) ? downloadsPath : defaultPath;
+
+        var folder = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title                  = "Choose download folder",
+            AllowMultiple          = false,
+            SuggestedStartLocation = await StorageProvider.TryGetFolderFromPathAsync(startPath),
+        });
+        return folder.Count > 0 ? folder[0].Path.LocalPath : null;
+    }
+
+    internal async Task ShowInfoAsync(string title, string message)
+    {
+        var btn = new Button
+        {
+            Content                    = "OK",
+            HorizontalAlignment        = Avalonia.Layout.HorizontalAlignment.Center,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            MinWidth                   = 70,
+            Classes                    = { "primary" },
+        };
+
+        var dialog = new Window
+        {
+            Title                 = title,
+            Width                 = 320,
+            SizeToContent         = SizeToContent.Height,
+            CanResize             = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new StackPanel
+            {
+                Margin  = new Avalonia.Thickness(28, 24, 28, 20),
+                Spacing = 18,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text                = message,
+                        TextWrapping        = Avalonia.Media.TextWrapping.Wrap,
+                        TextAlignment       = Avalonia.Media.TextAlignment.Center,
+                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                    },
+                    btn,
+                }
+            },
+        };
+
+        btn.Click += (_, _) => dialog.Close();
+        await dialog.ShowDialog(this);
     }
 
     private void OnUserGuideClick(object? sender, RoutedEventArgs e)
@@ -44,6 +105,24 @@ public partial class MainWindow : Window
         win.Show(this);
     }
 
+    private void OnBugReportClick(object? sender, RoutedEventArgs e)
+    {
+        Window? win = null;
+        var bugVm = new BugReportViewModel();
+        bugVm.CloseCallback = () => win?.Close();
+
+        win = new Window
+        {
+            Title                 = "Submit Feedback",
+            Width                 = 560,
+            SizeToContent         = SizeToContent.Height,
+            CanResize             = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content               = new BugReportView { DataContext = bugVm },
+        };
+        win.Show(this);
+    }
+
     private void OnAboutClick(object? sender, RoutedEventArgs e)
     {
         var win = new Window
@@ -54,6 +133,19 @@ public partial class MainWindow : Window
             CanResize             = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Content               = new AboutView(),
+        };
+        win.Show(this);
+    }
+
+    private void OnBatchProcessClick(object? sender, RoutedEventArgs e)
+    {
+        var win = new Window
+        {
+            Title                 = "Batch Process",
+            Width                 = 900,
+            Height                = 950,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content               = new BatchView { DataContext = new BatchViewModel() },
         };
         win.Show(this);
     }

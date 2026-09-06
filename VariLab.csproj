@@ -4,12 +4,17 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\VariLab.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
   <ItemGroup>
     <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
+    <!-- The PSF-fit engine (Python/Photutils) ships alongside the app, not as a compiled
+         asset — copied to the output directory so PsfEngineRuntimeService can find it next
+         to the .exe at runtime, the same way TransitLab locates its own bundled resources. -->
+    <None Include="PsfEngine\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

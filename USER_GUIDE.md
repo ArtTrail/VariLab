@@ -12,6 +12,11 @@ VariLab shares its comparison-star selection method ("Stone method," see below) 
 several core services with **TransitLab**, and is intended to eventually fold into a
 future TransitLab version as a variability-analysis mode.
 
+**Availability**: self-contained builds for Windows, macOS (Apple Silicon and Intel),
+and Linux are all available from the GitHub Releases page
+(github.com/ArtTrail/VariLab/releases) — no separate .NET install needed on any
+platform.
+
 ---
 
 ## Table of Contents
@@ -26,10 +31,12 @@ future TransitLab version as a variability-analysis mode.
    - [Controls](#controls)
 4. [Photometry tab](#4-photometry-tab)
 5. [Results tab](#5-results-tab)
-   - [Exports](#exports)
-6. [Known limitations](#6-known-limitations)
-7. [Appendix: Sources for AAVSO-related design decisions](#appendix-sources-for-aavso-related-design-decisions)
-8. [Appendix: From Python to C# — How VariLab Was Built](#appendix-from-python-to-c--how-varilab-was-built)
+   - [Exports](#exports-automatic)
+6. [Batch Process](#6-batch-process)
+7. [Known limitations](#7-known-limitations)
+8. [Appendix A: Sources for AAVSO-related design decisions](#appendix-a-sources-for-aavso-related-design-decisions)
+9. [Appendix B: PSF photometry vs. difference imaging in crowded fields](#appendix-b-psf-photometry-vs-difference-imaging-in-crowded-fields)
+10. [Appendix C: From Python to C# — How VariLab Was Built](#appendix-c-from-python-to-c--how-varilab-was-built)
 
 ---
 
@@ -48,8 +55,8 @@ VariLab has four tabs, used in order:
 
 | Field | Purpose |
 |---|---|
-| Target Directory | Folder of FITS frames — must be pre-calibrated and pre-plate-solved (valid WCS in each file). All frames should be the **same filter** — VariLab does not currently separate frames by filter, so a folder with mixed bands will produce a meaningless mixed-band light curve. As soon as a valid folder is set, VariLab reads the first FITS file's header for `OBJECT` and `FILTER` and auto-fills Target Name and Filter below (see next row) — then automatically runs the RA/Dec lookup. **Pointing this at a new folder clears the Comp Stars, Photometry, and Results tabs** — selected comps, the light curve, and period-search output from whatever dataset was open before are reset, so they can't be mistaken for results from the new one. |
-| Output Directory | Where the `VariLab_ResultsN` export folders (AAVSO `.txt`, Stellar Variability `.png`, Excel report) are saved — see [Exports](#exports). Defaults to match Target Directory whenever it changes, so exports normally land right next to the source frames with no extra setup. Browse to a different folder here to save exports somewhere else instead (e.g. a shared results folder, or alongside another tool's output for comparison) — once you do, it stops auto-following Target Directory, so it's safe to switch datasets afterward without it snapping back. |
+| Target Directory | Folder of FITS frames — must be pre-calibrated and pre-plate-solved (valid WCS in each file). All frames should be the **same filter** — VariLab does not currently separate frames by filter, so a folder with mixed bands will produce a meaningless mixed-band light curve. As soon as a valid folder is set, VariLab reads the first FITS file's header for `OBJECT` and `FILTER` and auto-fills Target Name and Filter below (see next row) — then automatically runs the RA/Dec lookup. **Pointing this at a new folder clears the Comp Stars, Photometry, and Results tabs** — selected comps, the light curve, and period-search output from whatever dataset was open before are reset, so they can't be mistaken for results from the new one. Remembers its own last-used folder across sessions, independently of every other directory field in the app (Output Directory, and the Batch window's own Input/Results Directories each remember their own separately). |
+| Output Directory | Where the `VariLab_ResultsN` export folders (AAVSO `.txt`, Stellar Variability `.png`, Excel report) are saved — see [Exports](#exports). Defaults to match Target Directory whenever it changes, so exports normally land right next to the source frames with no extra setup. Browse to a different folder here to save exports somewhere else instead (e.g. a shared results folder, or alongside another tool's output for comparison) — once you do, it stops auto-following Target Directory (so it's safe to switch datasets afterward without it snapping back), and that explicit choice is remembered as this field's own last-used value for next session, taking over from the auto-follow default at startup too. |
 | Target Name | The star's designation (e.g. `V0338 Cen`, `KELT-8`). Used for the AAVSO export's `#NAME` field and as the title on exported plots. Auto-filled from the FITS header's `OBJECT` keyword when a Target Directory is set — a trailing lowercase exoplanet-letter suffix is stripped (e.g. `KELT-8 b` → `KELT-8`, `TOI-4463 A b` → `TOI-4463 A`, keeping the uppercase host-star component letter). Edit it manually any time. **Trust this over the FITS header if they disagree** — see the Comp Stars tab's "Target not in frame" check below for a real case where a stale `OBJECT` header pointed VariLab at the wrong star entirely. |
 | Target RA / Target Dec | The target's sky position. Accepts **decimal degrees** (`213.9153`) or **sexagesimal** (`14:15:39.7` for RA, `-47:28:46` for Dec) — enter either format directly, whatever your source data gives you. Auto-filled once Target Name is populated (see Look Up RA/Dec below). |
 | **Look Up RA/Dec** button | Enter a Target Name and click this to auto-fill RA/Dec. It queries, in order: **AAVSO VSX** (variable star index) → **NASA Exoplanet Archive** (host star or planet name) → **SIMBAD** (general object database, resolves almost any common designation). The first catalog that recognizes the name wins; the status line reports which one matched and under what name. This same lookup runs automatically right after Target Name is auto-filled from a FITS header. |
@@ -124,6 +131,15 @@ After scoring, candidates are checked for **PSF quality** directly on the image
 vs. the field median, or an elongated PSF (blended star). Rejected candidates are
 automatically replaced from the backfill pool, for up to 3 passes.
 
+**Target neighbor pre-flight check** — comp candidates are isolation-checked (above),
+but the target itself never was, since it can't be swapped out for a cleaner one the
+way a bad comp candidate can. This check applies the identical isolation standard
+used for comps to the target's own position: if a Gaia-catalogued neighbor falls
+within that same exclusion radius, a warning appears on this tab (and in the pipeline
+log) *before* Photometry spends minutes on a run likely to have amplitude/mean-mag
+contamination — see Appendix B. Non-blocking; confirmed on two real cases (V1786 Cen,
+V1615 Cen) that would have tripped this immediately.
+
 ### Magnitude assignment — priority chain
 
 Each comp star's actual magnitude value comes from one of four sources, tried in
@@ -156,23 +172,42 @@ this order:
   run produces "No candidates" or an unexpectedly small ensemble.
 - One combined grid shows every candidate — a green ✓ marks a selected comp, a red
   ✗ marks one that was rejected during PSF validation, with the specific reason in
-  the last column. An animated progress bar appears while selection is running.
+  the last column. An animated progress bar and an elapsed-time counter appear
+  while selection is running.
 
 ---
 
 ## 4. Photometry tab
 
 Runs multi-frame differential photometry using the comp ensemble from the previous
-tab:
+tab. **Aperture** and **PSF Fit** are independent checkboxes, not an either/or choice
+— check one, or both. Checking both runs Aperture fully (including its own Results
+export) and then PSF Fit fully, one after the other, rather than requiring two
+separate manual Run clicks. An elapsed-time counter is shown next to the status line
+while a run is in progress.
 
-1. **Aperture sizing** — determined once from the reference frame's measured target
-   FWHM (aperture = 1.7×FWHM, sky annulus 3–5×FWHM), then held fixed across every
-   frame. A size that adapted per-frame would inject spurious flux changes into the
-   light curve that have nothing to do with real variability. The FWHM measurement
-   only counts flux that exceeds the local sky background by a noise-based
-   threshold (2σ over a robust sky sigma) — at low target SNR, ordinary background
-   noise scattered across the measurement window would otherwise get counted as
-   signal and inflate the computed FWHM, producing a badly oversized aperture.
+An overview of the pipeline itself:
+
+1. **Aperture sizing** — determined once from the reference frame (aperture =
+   1.7×FWHM, sky annulus 3–5×FWHM), then held fixed across every frame. A size
+   that adapted per-frame would inject spurious flux changes into the light curve
+   that have nothing to do with real variability. The sizing FWHM is the *median
+   of the comp ensemble's* measured FWHM, not the target's own — comps are chosen
+   to be isolated, clean point sources (the comp-selection step's isolation
+   check), so their FWHM is a more trustworthy basis than a single measurement
+   taken directly on the target. This matters because a neighbor close enough to
+   blend into the target's own reference-frame measurement — without being close
+   enough to trip the centroid-drift guard in step 7 — can otherwise inflate the
+   target's own FWHM and, from that, oversize the aperture for the whole run,
+   capturing more of the neighbor's flux every frame (confirmed on a real case:
+   KELT-8, with a G=11.8 Gaia neighbor 9″ away biasing the target's own FWHM to
+   11px against the comp ensemble's clean 4.6–5.5px). The target's own
+   reference-frame FWHM is still measured as a fallback, used only if no comp
+   star is measurable at all. Each FWHM measurement only counts flux that exceeds
+   the local sky background by a noise-based threshold (2σ over a robust sky
+   sigma) — at low SNR, ordinary background noise scattered across the
+   measurement window would otherwise get counted as signal and inflate the
+   computed FWHM, producing a badly oversized aperture.
 2. **Per-frame photometry** — for every FITS file, the target and every comp star's
    sky position is re-projected through *that frame's own WCS* (not reused from the
    reference frame), then refined to the actual local intensity centroid before the
@@ -212,11 +247,31 @@ tab:
    fields — an isolated target's centroid should never legitimately drift anywhere
    near 6px, so this is invisible in normal use. Rejected frames show up in the
    frame-by-frame grid with reason "target centroid drifted N.Npx from WCS position".
+8. **Nearby-star warning** — a complementary, non-blocking check for the case a
+   neighbor is close enough to blend into the target's photometry without pulling
+   the centroid past the 6px threshold in step 7. If the target's own
+   reference-frame FWHM (measured in step 1) is 1.5× or more the comp ensemble's
+   median FWHM, VariLab shows a warning in the Photometry tab's status line (and
+   logs it to the session log) naming the measured ratio, so you know to check the
+   field for a close companion. It doesn't stop or alter the run — aperture sizing
+   already defends against this in step 1 by using the comp median instead of the
+   target's own reading — this is just a flag that contamination may still be
+   present even after that defense, since a wide or partial blend can survive it.
 
 ---
 
 ## 5. Results tab
 
+- **Crowding flags** — runs automatically alongside the period search. Every comp
+  star's magnitude is correlated against per-frame FWHM (a good comp is non-variable,
+  so its own magnitude *is* its residual); the target's magnitude is first detrended
+  against a binned phase-fold (skipped if the period search's best power is too low to
+  trust) before the same correlation is run on what's left. Any star with a
+  statistically significant correlation (p < 0.01) is flagged — a bold warning on this
+  tab, in the AAVSO NOTES field, and as its own sheet in the Excel report (always
+  present, even with zero rows, so its absence is a checked-and-clean result rather
+  than ambiguous with "never checked"). See Appendix B for why this check exists and
+  what it catches that a clean-looking light curve can still hide.
 - **Period search** — runs automatically as soon as Photometry finishes, no button
   click needed (a "Re-run Period Search" button remains for after adjusting the
   min/max period range or fold period). Uses a native Lomb-Scargle periodogram
@@ -237,13 +292,24 @@ tab:
 ### Exports (automatic)
 
 All three files below are saved automatically the moment the period search
-completes — no export button needed. Each run is saved into its own numbered
-`VariLab_ResultsN` subfolder of the Target Directory from the Data tab
-(`VariLab_Results1`, `VariLab_Results2`, `VariLab_Results3`, ...) — the next
-unused number is picked automatically each time, so separate runs never mix
-their files together. Each filename also still carries its own
-`{yyyyMMdd_HHmmss}` timestamp, and the Status line reports exactly where the
-files were saved.
+completes — no export button needed. Each run is saved into its own
+`VariLab_Results_{Target}_{ObsDate}_{Mode}_N` subfolder of the Output
+Directory from the Data tab (e.g. `VariLab_Results_V1585 Cen_20240702_
+PsfFit_1`) — the target name, observing date, and photometry mode are all in
+the folder name so an Aperture run and a PSF Fit run on the same target/night
+are never mistaken for the same result without opening either one. The
+trailing number still disambiguates repeat runs of the same target/night/mode
+combination. Each filename also still carries its own `{yyyyMMdd_HHmmss}`
+timestamp, and the Status line reports exactly where the files were saved.
+
+**If a run fails** at any stage — Comp Stars, Photometry, or Results — instead
+of a `VariLab_Results_...` folder, a `VariLab_FAILED_{Target}_{ObsDate}_
+{Mode}_N` folder appears in the same place, containing a single
+`failure_reason.txt` with the specific reason (e.g. no comparison stars
+found, every frame rejected for centroid drift, too few accepted frames to
+fold a light curve). This is the only record of a failed run — check here
+before assuming a missing results folder means the target simply wasn't
+tried yet.
 
 - **AAVSO Extended Format (.txt)** — ready for AAVSO WebObs upload. Uses
   `CNAME=ENSEMBLE` (AAVSO's documented convention when there's no single comp star
@@ -256,8 +322,9 @@ files were saved.
   PNG" button to open the most recently saved one in-app.
 - **Excel Report (.xlsx)** — a four-sheet workbook:
   - **Data** — every accepted frame's JD, magnitude, error, and airmass
-  - **Comp Stars** — full detail on the selected ensemble (position, magnitude,
-    source, FWHM, SNR, Gaia ID, AUID, separation, color, RUWE)
+  - **Comp Stars** — full detail on the selected ensemble (comp number "C1"/"C2"/...
+    matching the field image and photometry labels, position, magnitude, source,
+    FWHM, SNR, Gaia ID, AUID, separation, color, RUWE)
   - **Rejected Comps** — candidates that failed PSF validation, with the specific
     reason
   - **Plots** — the Light Curve and Phase-Folded chart images embedded directly in
@@ -275,10 +342,73 @@ files were saved.
   with each other. Meant for diagnosing a light curve trend that doesn't have an
   obvious cause — is it isolated to one comp star, shared across the whole
   ensemble, or does it track a real PSF/seeing change over the session?
+- **Field Image (.png)** — a stretched crop of the reference frame around the
+  target and comp ensemble, with the target's own name labeled (not the generic
+  word "Target") and every comp labeled "C1"/"C2"/... matching the Excel report
+  and photometry output. In Aperture mode, the actual fixed aperture and sky
+  annulus circles used for the whole run are drawn to scale around the target;
+  in PSF Fit mode (which has no single fixed aperture size — each frame's fit has
+  its own footprint) a small marker circle is drawn instead, purely to show where
+  the target and comps are, not a real photometric footprint.
 
 ---
 
-## 6. Known limitations
+## 6. Batch Process
+
+**Tools → Batch Process…** runs the same Comp Stars → Photometry → Results
+pipeline the four main tabs already do, but across a list of targets instead
+of one at a time — the same underlying code, just driven by a loop instead of
+clicking Run repeatedly. Useful for working through many targets from the same
+night's dataset (e.g. every RR Lyrae candidate in a cluster field).
+
+- **Input Directory** — the same folder of pre-calibrated, plate-solved FITS
+  frames used for every target in the batch (see [Data tab](#2-data-tab)).
+  Remembers its own last-used folder across sessions, independently of every
+  other directory field in the app.
+- **Results Directory** — a single base folder; each target gets its own
+  subfolder created automatically underneath it (named after the target, with
+  any characters invalid in a Windows folder name replaced). No pre-existing
+  folder structure is required — subfolders are created as the batch reaches
+  each target. Also remembers its own last-used value independently.
+- **Targets** — one target name per line, exactly as it would be typed into
+  the Data tab's Target Name field. Either type/paste the list directly, or
+  click **Import from file…** to load one from a CSV or XLSX file: pick the
+  file, then pick which column holds the target names from the dropdown that
+  appears, then **Use column** to fill the target list from it. The list stays
+  editable afterward — importing just fills in a starting point.
+- **Filter / Max comp stars / AAVSO Observer Code** — same meaning as the Data
+  and Comp Stars tabs, applied to every target in the batch.
+- **Aperture / PSF Fit** — check either or both; whichever are checked run for
+  every target, one after the other (Aperture first).
+- **Pop up the results plot** — off by default. When checked, opens a preview
+  window for each result plot as it's produced during the run. Windows stay
+  open and cascade (each offset diagonally from the last) rather than closing
+  or replacing one another, so a long batch — or one running both photometry
+  methods — builds up its full visual history as it goes rather than only
+  showing the most recent plot.
+
+For each target, in order: resolve its name to RA/Dec (same AAVSO VSX → NASA
+Exoplanet Archive → SIMBAD chain as the Data tab), run Comp Stars, then run
+each checked photometry mode — each of which auto-exports via the Results tab
+exactly as it would from a manual run. If a target's name can't be resolved,
+if Comp Stars finds no usable comparison stars, or if a photometry run
+accepts too few frames to fold a light curve, that target is skipped and the
+batch moves on to the next one — the specific reason is written to a
+`VariLab_FAILED_{Target}_{Date}_{Mode}_N\failure_reason.txt` file inside that
+target's subfolder, the same failure-reporting mechanism used everywhere else
+in VariLab (see [Known limitations](#7-known-limitations) note on this below).
+A source (VSP/Gaia/APASS) that fails to respond doesn't stop a batch run
+either — it's treated the same as clicking "Continue Anyway" would be during
+a manual run, using whichever sources did respond.
+
+Targets are processed **strictly one at a time** — there's no option yet to
+run several in parallel. The per-frame PSF Fit computation itself isn't any
+faster than running it manually; what Batch Process removes is the time spent
+between steps (switching tabs, waiting, re-entering the next target by hand).
+
+---
+
+## 7. Known limitations
 
 - No per-filter frame separation — point the Target Directory at a single-filter
   folder.
@@ -287,13 +417,15 @@ files were saved.
 - No transformation-coefficient computation (raw differential photometry only,
   `TRANS=NO`).
 - No variable-star sequence generator (for fields with no existing AAVSO chart).
-- Single target per run; one-shot batch processing only (no live-monitor mode).
+- Batch Process (see [above](#6-batch-process)) runs multiple targets
+  sequentially, but not concurrently, and there's no live-monitor mode (new
+  frames arriving during a run).
 - Period-search uncertainty is not formally estimated — only the best period and
   its power are reported.
 
 ---
 
-## Appendix: Sources for AAVSO-related design decisions
+## Appendix A: Sources for AAVSO-related design decisions
 
 Several of VariLab's design choices are based on AAVSO's own published guidance rather
 than assumption. This appendix lists the specific claim and the source it came from, so
@@ -311,10 +443,85 @@ any decision here can be independently checked rather than taken on faith.
 | `TRANS=NO` (no transformation coefficients) is standard, accepted practice for this citizen-science exoplanet-host workflow — confirmed directly against a real EXOTIC 4.3.1 AAVSO submission file (NASA/JPL Exoplanet Watch's own pipeline), which also submits `TRANS=NO` | User-provided file: `AID_AAVSO_Qatar-1_20-JUN-2026.txt`. General AAVSO preference for transformed data, for context: [Use of transformation coefficients](https://www.aavso.org/use-transformation-coefficients) |
 | AAVSO's own period-analysis tool (VStar) is built around DCDFT, not literally "Lomb-Scargle" by name — but DCDFT and the Generalized/floating-mean Lomb-Scargle periodogram (what VariLab implements) are mathematically equivalent least-squares sinusoid+constant fits | [Time Series Tutorial](https://www.aavso.org/time-series-tutorial), Benn, D., 2012, "Algorithms + Observations = VStar," *JAAVSO* 40, [852](https://www.aavso.org/sites/default/files/jaavso/v40n2/852.pdf) |
 | Lomb-Scargle period-search algorithm (generalized/floating-mean formulation) implemented natively in `Services/PeriodSearchService.cs` | Zechmeister, M. & Kürster, M. 2009, "The generalised Lomb-Scargle periodogram," *A&A* 496, 577 — [full text](https://www.aanda.org/articles/aa/full_html/2009/11/aa11296-08/aa11296-08.html) |
+| `FILT` export mapping for filters with no valid AAVSO ShortName (`L`→`CV`, `C`→`CV`, `CBB`→`CR`, `Rc`→`R`, `Ic`→`I`) — confirmed `L` isn't an accepted ShortName, and that AAVSO's own documented practice for Luminance/Clear/CBB imaging is to submit as CV or CR referenced to whichever comp-star band was used | [Filter Band ShortNames API](https://vsx.aavso.org/index.php?view=api.bands), [How to submit and measure images with a clear or luminance filter?](https://www.aavso.org/how-submit-and-measure-images-clear-or-luminance-filter), [Luminance filter](https://www.aavso.org/luminance-filter) |
 
 ---
 
-## Appendix: From Python to C# — How VariLab Was Built
+## Appendix B: PSF photometry vs. difference imaging in crowded fields
+
+**Source**: *"Globular Cluster RR Lyrae Program — Critique of the Proposed Plan, and a
+Revised Program for the 0.61 m CDK24"* (internal document, provided by a collaborator;
+analysis of a telescope-time proposal for Dimension Point Observatory, Mayhill, NM,
+covering M3/M5/M53/NGC 5466 and M2/NGC 6934/NGC 6981/M15 — a different instrument and
+cluster sample than VariLab's own NGC 5139/Omega Centauri testing, which is too far
+south to observe from that site). Reviewed 2026-08-14.
+
+### The core finding
+
+The document's method-comparison table (§1.3) states, without qualification:
+
+> **PSF photometry** — Fails in cluster cores at any seeing; mandatory failure at 2.5″
+> → replaced by **Difference Image Analysis (DIA)**, Alard & Lupton kernel
+
+This matches VariLab's own real-world experience building and testing PSF Fit mode
+against NGC 5139 (a considerably more crowded core than any cluster in that document's
+sample). Two independent close-neighbor targets (V1786 Cen, V1786's Gaia companion 4.4″
+away and 2.2 mag brighter; V1615 Cen, a comparable case) both produced amplitude
+inflation relative to their VSX reference values, traced to the same root cause: PSF
+fitting has to solve a per-frame flux *split* between blended stars, and for a close,
+high-contrast pair, more than one split can fit the pixel data almost equally well.
+`qfit`/`flags` (Photutils' own fit-quality metrics) don't reliably distinguish a correct
+split from a plausible-but-wrong one — this is a structural property of simultaneous
+PSF fitting on blended sources, not an engine bug, and every mitigation tried (grouping
+radius, saturation checks, Gaia neighbor seeding, per-frame ePSF rebuilding) failed to
+resolve it.
+
+**Why DIA sidesteps this**: DIA never computes absolute flux via multi-star
+deblending. It convolves a stable reference/template image to match each new frame's
+PSF, subtracts it, and measures the *residual* — a star's own flux change shows up
+directly at its catalog position without ever having to decide how much of the
+blended light belongs to which star. A constant blend contribution simply subtracts
+out. This is why every difference-imaging pipeline built specifically for crowded
+fields (Bramich 2008; Bramich et al. 2013, "DanDIA") exists as a separate method from
+PSF photometry rather than a variant of it.
+
+### What this means for VariLab's PSF Fit mode
+
+PSF Fit mode remains valid and useful for **isolated targets** (validated end-to-end
+against V1655 Cen: mean-mag and amplitude within ~0.01 mag of Aperture mode, plus 4
+extra usable frames). It is **not** the right tool for the close-neighbor crowded-core
+case that originally motivated building it — that case needs difference imaging, which
+VariLab does not currently implement. This is a real, documented limitation of the
+method, not a defect to keep chasing with parameter tuning.
+
+### Actionable ideas from this document, independent of whether DIA is ever built
+
+- **FWHM-residual crowding regression** (§2.9, called "not optional" in the source
+  document) — **implemented**: see `Services/CrowdingFlagService.cs`, wired into the
+  Results tab, AAVSO NOTES, and the Excel report's "Crowding Flags" sheet. Comp stars
+  are checked directly (magnitude vs. FWHM); the target is checked against
+  phase-detrended residuals (`PeriodSearchService.PhaseResiduals`), skipped if the
+  period search's best power doesn't clear a confidence floor. Also implemented: a
+  **target neighbor pre-flight check** (Comp Stars tab, before Photometry ever runs)
+  — see its section above. (A frame-level seeing cutoff was also implemented here at
+  one point but was removed in v1.5.1 — it wasn't found to meaningfully affect
+  results in practice.)
+- **Self-referential crowding limit** (§2.4) — define the crowding limit as the
+  cluster-centric radius at which a star's photometric scatter reaches 2× the scatter
+  of isolated stars of matched brightness on the *same* frames. Self-calibrates per
+  night/dataset rather than depending on an assumed noise floor.
+- **Times-of-maximum (O–C) as a blend-resistant measurement** (§2.2) — a constant
+  blend contribution shifts mean magnitude and compresses amplitude, but does not move
+  the phase of maximum light. For a target where amplitude will never be trustworthy
+  by any method (a genuinely close, bright neighbor), epoch-of-maximum timing may still
+  be a usable, robust measurement — a fundamentally different thing to optimize for
+  than amplitude/mean-mag accuracy.
+
+---
+
+---
+
+## Appendix C: From Python to C# — How VariLab Was Built
 
 A shorter, more informal note than the rest of this guide — the story of what's native
 C# vs. what's still Python under the hood, and what actually got tested along the way,

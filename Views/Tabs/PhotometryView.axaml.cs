@@ -15,7 +15,10 @@ public partial class PhotometryView : UserControl
         DataContextChanged += (_, _) =>
         {
             if (DataContext is PhotometryViewModel vm)
+            {
                 vm.ExcludeTransitFunc = ExcludeTransitAsync;
+                vm.OpenPsfSetupFunc   = OpenPsfSetupAsync;
+            }
         };
     }
 
@@ -25,5 +28,11 @@ public partial class PhotometryView : UserControl
         return owner is not null
             ? TransitExclusionWindow.ShowAsync(owner, points, yLabel)
             : Task.FromResult<bool[]?>(null);
+    }
+
+    private Task OpenPsfSetupAsync()
+    {
+        var owner = TopLevel.GetTopLevel(this) as Window;
+        return owner is not null ? PsfEngineSetupWindow.ShowAsync(owner) : Task.CompletedTask;
     }
 }

@@ -25,6 +25,18 @@ public partial class DataViewModel : ViewModelBase
     [ObservableProperty] private string _status          = "";
     [ObservableProperty] private bool   _isLookingUp     = false;
 
+    /// <summary>True only after a successful name→RA/Dec lookup for the CURRENT TargetName —
+    /// reset to false whenever TargetName changes (a resolution for the old name doesn't carry
+    /// over) or a lookup fails. Comp Stars' Run button is gated on this, since running against
+    /// an unresolved/stale RA/Dec is guaranteed to fail downstream anyway.</summary>
+    [ObservableProperty] private bool   _targetResolved  = false;
+
+    /// <summary>True only right after a failed lookup — distinct from simply "!TargetResolved",
+    /// which is also true before any lookup has ever been attempted (nothing wrong yet, just
+    /// nothing tried). Drives the Status text turning red; TargetResolved alone drives the Run
+    /// button gating.</summary>
+    [ObservableProperty] private bool   _lookupFailed    = false;
+
     // Matches TransitLab's full filter-code list (EquipmentTargetViewModel.FilterCodes), plus
     // Rc/Ic/C which VariLab already recognized and TransitLab doesn't separately list. Most of
     // these (SU, U, Y, J, H, K, MA, MB, MI, N/A, ST*) have no comp-star magnitude source in
@@ -44,10 +56,22 @@ public partial class DataViewModel : ViewModelBase
         _aavsoObserverCode = _config.AavsoObserverCode;
 
         // Restore the last-used Target Directory (via the property setter, not the backing
-        // field, so it drives the same auto-fill/auto-detect as a fresh Browse… pick — Output
-        // Directory ends up tracking THIS restored value, not a separately-persisted one).
+        // field, so it drives the same auto-fill/auto-detect as a fresh Browse… pick). This
+        // also fires OnInputDirectoryChanged below, which — since OutputDirUserSet is still
+        // false at this point — sets OutputDirectory to match, exactly like a fresh session's
+        // auto-follow would.
         if (!string.IsNullOrEmpty(_config.LastTargetDirectory))
             InputDirectory = _config.LastTargetDirectory;
+
+        // Now restore Output Directory's own independently-remembered value, if the user has
+        // ever explicitly browsed to one (BrowseOutputDirectory is the only place that saves
+        // this) — overriding whatever the auto-follow above just set, and marking it user-set
+        // so this session's own Target Directory changes don't silently overwrite it again.
+        if (!string.IsNullOrEmpty(_config.LastOutputDirectory))
+        {
+            OutputDirectory = _config.LastOutputDirectory;
+            OutputDirUserSet = true;
+        }
     }
 
     partial void OnAavsoObserverCodeChanged(string value)
@@ -56,8 +80,10 @@ public partial class DataViewModel : ViewModelBase
         ConfigService.Save(_config);
     }
 
-    /// <summary>Set by the view's code-behind to the platform folder picker.</summary>
-    public System.Func<string, Task<string?>>? FolderPickerFunc { get; set; }
+    /// <summary>Set by the view's code-behind to the platform folder picker. Second arg is the
+    /// starting directory to suggest — each field passes its own current value, not a value
+    /// shared across fields (see BrowseInputDirectory/BrowseOutputDirectory).</summary>
+    public System.Func<string, string?, Task<string?>>? FolderPickerFunc { get; set; }
 
     private string? _lastAutoDetectedDir;
 
@@ -70,7 +96,7 @@ public partial class DataViewModel : ViewModelBase
     private async Task BrowseInputDirectory()
     {
         if (FolderPickerFunc is null) return;
-        var path = await FolderPickerFunc("Select folder of pre-calibrated, plate-solved FITS frames");
+        var path = await FolderPickerFunc("Select folder of pre-calibrated, plate-solved FITS frames", InputDirectory);
         if (!string.IsNullOrEmpty(path))
             InputDirectory = path;
     }
@@ -79,11 +105,13 @@ public partial class DataViewModel : ViewModelBase
     private async Task BrowseOutputDirectory()
     {
         if (FolderPickerFunc is null) return;
-        var path = await FolderPickerFunc("Select folder for VariLab's exported results");
+        var path = await FolderPickerFunc("Select folder for VariLab's exported results", OutputDirectory);
         if (!string.IsNullOrEmpty(path))
         {
             OutputDirectory = path;
             OutputDirUserSet = true;
+            _config.LastOutputDirectory = path;
+            ConfigService.Save(_config);
         }
     }
 
@@ -122,7 +150,12 @@ public partial class DataViewModel : ViewModelBase
         _ = AutoDetectFromFitsAsync(fitsPath);
     }
 
-    partial void OnTargetNameChanged(string value) => TargetNameChanged?.Invoke();
+    partial void OnTargetNameChanged(string value)
+    {
+        TargetResolved = false;
+        LookupFailed   = false;
+        TargetNameChanged?.Invoke();
+    }
 
     private async Task AutoDetectFromFitsAsync(string fitsPath)
     {
@@ -186,12 +219,16 @@ public partial class DataViewModel : ViewModelBase
             var result = await TargetResolverService.ResolveAsync(TargetName, progress);
             if (result is null)
             {
+                TargetResolved = false;
+                LookupFailed   = true;
                 Status = $"✗  '{TargetName}' not found in VSX, NASA Exoplanet Archive, or SIMBAD.";
                 return;
             }
 
             TargetRaText  = result.Ra.ToString("F6");
             TargetDecText = result.Dec.ToString("F6");
+            TargetResolved = true;
+            LookupFailed   = false;
             Status = $"✓  Resolved via {result.Source} as '{result.MatchedName}'  " +
                       $"(RA={result.Ra:F6}, Dec={result.Dec:F6})";
         }

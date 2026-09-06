@@ -1,0 +1,90 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VariLab.ViewModels"
+             x:Class="VariLab.Views.BugReportView"
+             x:DataType="vm:BugReportViewModel">
+
+    <Border Padding="28,22,28,22">
+        <StackPanel Spacing="14">
+
+            <!-- Note -->
+            <TextBlock Classes="hint"
+                       TextWrapping="Wrap"
+                       Text="Reports are submitted to the VariLab GitHub repository and are publicly visible. After submitting, please email your diagnostics log (Tools → Diagnostics → Save Log) to art.trail@icloud.com so the issue can be investigated."/>
+
+            <Rectangle Height="1" Fill="{StaticResource BrushSep}"/>
+
+            <!-- Type -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="Type" FontWeight="SemiBold"/>
+                <ComboBox ItemsSource="{Binding ReportTypes}"
+                          SelectedItem="{Binding ReportType}"
+                          HorizontalAlignment="Stretch"/>
+            </StackPanel>
+
+            <!-- Summary -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="Summary  (optional)" FontWeight="SemiBold"/>
+                <TextBox Text="{Binding Summary}"
+                         Watermark="One-line summary…"
+                         IsEnabled="{Binding !IsSubmitted}"/>
+            </StackPanel>
+
+            <!-- Description -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="Description  *" FontWeight="SemiBold"/>
+                <TextBox Text="{Binding Description}"
+                         Watermark="Describe the issue or feature request…"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         Height="120"
+                         IsEnabled="{Binding !IsSubmitted}"/>
+            </StackPanel>
+
+            <!-- Email -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="Contact email  *" FontWeight="SemiBold"/>
+                <TextBox Text="{Binding Email}"
+                         Watermark="your@email.com"
+                         IsEnabled="{Binding !IsSubmitted}"/>
+            </StackPanel>
+
+            <!-- Auto-filled info -->
+            <StackPanel Orientation="Horizontal" Spacing="20">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Classes="hint" Text="Version:"/>
+                    <TextBlock Classes="hint" Text="{Binding Version}" FontWeight="SemiBold"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Classes="hint" Text="OS:"/>
+                    <TextBlock Classes="hint" Text="{Binding OsName}" FontWeight="SemiBold"/>
+                </StackPanel>
+            </StackPanel>
+
+            <Rectangle Height="1" Fill="{StaticResource BrushSep}"/>
+
+            <!-- Buttons -->
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Spacing="10">
+                <Button Content="Cancel"
+                        Command="{Binding CancelCommand}"
+                        HorizontalContentAlignment="Center"
+                        MinWidth="80"/>
+                <Button Content="Submit Report"
+                        Classes="primary"
+                        Command="{Binding SubmitCommand}"
+                        MinWidth="110"
+                        IsVisible="{Binding !IsSubmitted}"/>
+            </StackPanel>
+
+            <!-- Status -->
+            <TextBlock Text="{Binding StatusText}"
+                       Classes="hint"
+                       TextWrapping="Wrap"
+                       IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+        </StackPanel>
+    </Border>
+
+</UserControl>

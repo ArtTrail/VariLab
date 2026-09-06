@@ -7,6 +7,7 @@
         mc:Ignorable="d" d:DesignWidth="1300" d:DesignHeight="900"
         x:Class="VariLab.MainWindow"
         x:DataType="vm:MainWindowViewModel"
+        Icon="avares://VariLab/Assets/VariLab.ico"
         Width="1300" Height="900"
         MinWidth="1100" MinHeight="700">
 
@@ -15,6 +16,8 @@
         <!-- ── Menu bar ─────────────────────────────────────────────────── -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_Tools">
+                <MenuItem Header="Batch Process…"
+                          Click="OnBatchProcessClick"/>
                 <MenuItem Header="Diagnostics"
                           Click="OnDiagnosticsClick"/>
             </MenuItem>
@@ -23,11 +26,80 @@
                           Click="OnUserGuideClick"/>
                 <MenuItem Header="Revision History"
                           Click="OnRevisionHistoryClick"/>
+                <MenuItem Header="Check for Updates"
+                          Command="{Binding CheckForUpdatesCommand}"/>
+                <MenuItem Header="Submit Feedback"
+                          Click="OnBugReportClick"/>
                 <Separator/>
                 <MenuItem Header="About VariLab"
                           Click="OnAboutClick"/>
             </MenuItem>
         </Menu>
+
+        <!-- ── Update banner: available ─────────────────────────────────── -->
+        <Border DockPanel.Dock="Top"
+                IsVisible="{Binding IsUpdateAvailable}"
+                Background="#1a4a1a"
+                Padding="12,6">
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <TextBlock Text="{Binding UpdateVersionText}"
+                           Foreground="#90ee90"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+                <Button Content="Download"
+                        Command="{Binding DownloadUpdateCommand}"
+                        Classes="toolbar"
+                        ToolTip.Tip="Downloads the zip/dmg to a folder you choose — you extract and replace the app files yourself."/>
+                <Button Content="Skip"
+                        Command="{Binding SkipUpdateCommand}"
+                        Classes="toolbar"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Update banner: downloading ───────────────────────────────── -->
+        <Border DockPanel.Dock="Top"
+                IsVisible="{Binding IsUpdateDownloading}"
+                Background="#1a3a4a"
+                Padding="12,6">
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <TextBlock Text="{Binding UpdateStatusText}"
+                           Foreground="#87ceeb"
+                           VerticalAlignment="Center"
+                           MinWidth="300"/>
+                <ProgressBar Value="{Binding UpdateProgress}"
+                             Maximum="100"
+                             Width="200"
+                             Height="8"
+                             VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Update banner: done ──────────────────────────────────────── -->
+        <Border DockPanel.Dock="Top"
+                IsVisible="{Binding IsUpdateDone}"
+                Background="#1a4a1a"
+                Padding="12,6">
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <TextBlock Text="{Binding UpdateStatusText}"
+                           Foreground="#90ee90"
+                           VerticalAlignment="Center"
+                           TextWrapping="NoWrap"/>
+                <Button Content="OK"
+                        Command="{Binding DismissUpdateDoneCommand}"
+                        Classes="toolbar"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Header banner: logo + title, bigger than just the window/taskbar icon ── -->
+        <Border DockPanel.Dock="Top" Padding="16,10,16,10">
+            <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+                <Image Source="avares://VariLab/Assets/VariLab_logo.png" Width="104" Height="104"/>
+                <StackPanel VerticalAlignment="Center" Spacing="0">
+                    <TextBlock Classes="title" Text="VariLab"/>
+                    <TextBlock Classes="hint" Text="Standalone stellar-variability companion to TransitLab"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
 
         <!-- ── Separator ────────────────────────────────────────────────── -->
         <Rectangle DockPanel.Dock="Top"

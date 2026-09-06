@@ -12,11 +12,23 @@
             <TextBlock Classes="hint" TextWrapping="Wrap"
                        Text="Fixed-aperture photometry on the target and every Stone-ensemble comp star across all frames, combined via weighted-median ensemble differential photometry, with 3σ frame rejection."/>
 
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <CheckBox Content="Aperture" IsChecked="{Binding IsAperture}"/>
+                    <CheckBox Content="PSF Fit" IsChecked="{Binding IsPsfFit}"/>
+                </StackPanel>
+                <TextBlock Classes="hint" Text="Check both to run Aperture then PSF Fit, one after the other" VerticalAlignment="Center"/>
+                <Button Classes="toolbar" Content="PSF Engine Setup..." Command="{Binding OpenPsfSetupCommand}"
+                        IsVisible="{Binding IsPsfFit}"/>
+            </StackPanel>
+
             <StackPanel Orientation="Horizontal" Spacing="10">
                 <Button Classes="primary" Content="Run" Command="{Binding RunCommand}" IsEnabled="{Binding !IsRunning}"/>
                 <Button Classes="toolbar" Content="Cancel" Command="{Binding CancelCommand}" IsEnabled="{Binding IsRunning}"/>
                 <Button Classes="toolbar" Content="Exclude Transit..." Command="{Binding ExcludeTransitCommand}" IsEnabled="{Binding HasPoints}"/>
                 <TextBlock Classes="hint" Text="{Binding Status}" VerticalAlignment="Center"/>
+                <TextBlock Classes="hint" Text="{Binding ElapsedText, StringFormat='Elapsed: {0}'}" VerticalAlignment="Center"
+                           IsVisible="{Binding ElapsedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
             </StackPanel>
 
             <TextBlock Text="{Binding Summary}" FontWeight="Bold" IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>

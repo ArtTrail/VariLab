@@ -1,0 +1,39 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:VariLab.ViewModels"
+        x:DataType="vm:PsfEngineSetupViewModel"
+        x:Class="VariLab.Views.PsfEngineSetupWindow"
+        Title="PSF Engine Setup"
+        Width="640"
+        Height="480"
+        MinWidth="480"
+        MinHeight="360"
+        WindowStartupLocation="CenterOwner">
+
+    <DockPanel Margin="20">
+
+        <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12">
+            <TextBlock Classes="h2" Text="PSF Engine Setup"/>
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="PSF Fit mode runs a bundled Python/Photutils engine in its own isolated environment (never touches any other Python install on this machine). One-time setup per machine: finds a Python 3.11+ interpreter, creates the environment, and installs astropy/photutils/numpy/scipy into it."/>
+            <TextBlock Text="{Binding StatusHeadline}" FontWeight="Bold" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="10"
+                    HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Classes="toolbar" Content="Check Status" Command="{Binding CheckStatusCommand}" IsEnabled="{Binding !IsBusy}"/>
+            <Button Classes="toolbar" Content="Cancel" Command="{Binding CancelCommand}" IsEnabled="{Binding IsBusy}"/>
+            <Button Classes="primary" Content="Install / Set Up" Command="{Binding InstallCommand}" IsEnabled="{Binding !IsBusy}"/>
+            <Button x:Name="CloseButton" Classes="toolbar" Content="Close"/>
+        </StackPanel>
+
+        <Border BorderBrush="#444" BorderThickness="1">
+            <ScrollViewer>
+                <TextBox Text="{Binding LogText}" IsReadOnly="True" AcceptsReturn="True"
+                         TextWrapping="Wrap" FontFamily="Consolas,monospace" FontSize="12.5"
+                         BorderThickness="0" Background="Transparent" Padding="8"/>
+            </ScrollViewer>
+        </Border>
+
+    </DockPanel>
+</Window>

@@ -49,6 +49,20 @@ public partial class ResultsViewModel : ViewModelBase
     /// used to enable the "View PNG" button.</summary>
     [ObservableProperty] private string? _lastVariabilityPngPath;
 
+    /// <summary>FWHM-residual crowding regression results (CrowdingFlagService) — set after
+    /// every run, empty if nothing was flagged. See USER_GUIDE.md Appendix B for the source
+    /// and reasoning.</summary>
+    [ObservableProperty] private string _crowdingFlagsSummary = "";
+
+    private List<CrowdingFlagService.CrowdingFlagResult> _crowdingFlags = [];
+
+    // No formal false-alarm-probability is computed for the period search (see
+    // PeriodSearchService), so this is a heuristic confidence floor, not a statistical
+    // threshold: below it, a "best period" is too likely to be noise for its phase-fold
+    // residuals to mean anything, and the target crowding check is skipped rather than run
+    // against a meaningless detrend.
+    private const double MinPeriodPowerForCrowdingCheck = 0.3;
+
     private double[] _jd = [];
     private double[] _mag = [];
     private double[] _magErr = [];
@@ -61,17 +75,41 @@ public partial class ResultsViewModel : ViewModelBase
 
     private static string Timestamp() => DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
 
-    /// <summary>Finds the next unused "VariLab_ResultsN" subfolder under baseDir (VariLab_Results1,
-    /// VariLab_Results2, ...) and creates it, so each export run gets its own folder instead of
-    /// piling loose files directly into the target directory.</summary>
-    private static string GetNextResultsDir(string baseDir)
+    /// <summary>Replaces characters that are invalid in a Windows file/folder name with "_" —
+    /// needed once TargetName starts feeding into a directory name rather than just a filename
+    /// prefix, since an unsanitized value (e.g. containing ":" or "/") would otherwise throw
+    /// instead of producing a usable path.</summary>
+    private static string SanitizeForPath(string s) =>
+        string.Concat(s.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+
+    /// <summary>The observing night's calendar date (yyyyMMdd) for a given JD, using the common
+    /// "UT date shifted back 12h" convention so a post-midnight-UTC frame still reports the
+    /// evening date observers actually call that night — e.g. a frame at 2026-07-24 02:45 UTC
+    /// reports as 20260723, matching how observers name the session, not the UTC calendar day.</summary>
+    private static string ObsDateStamp(double jd) =>
+        DateTime.UnixEpoch.AddDays(jd - 0.5 - 2440587.5).ToString("yyyyMMdd");
+
+    /// <summary>Finds the next unused "VariLab_Results_{Target}_{ObsDate}_{Mode}_N" subfolder
+    /// under baseDir and creates it, so each export run gets its own folder instead of piling
+    /// loose files directly into the target directory. Target name, obs date, and photometry
+    /// mode make the folder identifiable at a glance instead of requiring you to open it —
+    /// the mode tag specifically exists so an Aperture run and a PSF Fit run on the same
+    /// target/night never look like the same result (confirmed as a real point of confusion:
+    /// without it, the two are indistinguishable except by opening files and comparing
+    /// numbers). The trailing N still disambiguates repeat runs of the same target/night/mode
+    /// combo.</summary>
+    private static string GetNextResultsDir(string baseDir, string targetName, double firstJd, string modeTag)
     {
+        var safeName = SanitizeForPath(targetName);
+        var obsDate  = ObsDateStamp(firstJd);
+        var prefix   = $"VariLab_Results_{safeName}_{obsDate}_{modeTag}_";
+
         int n = 1;
         if (Directory.Exists(baseDir))
         {
             var existing = Directory.GetDirectories(baseDir)
                 .Select(Path.GetFileName)
-                .Select(fname => Regex.Match(fname ?? "", @"^VariLab_Results(\d+)$"))
+                .Select(fname => Regex.Match(fname ?? "", $"^{Regex.Escape(prefix)}(\\d+)$"))
                 .Where(m => m.Success)
                 .Select(m => int.Parse(m.Groups[1].Value))
                 .ToList();
@@ -79,7 +117,7 @@ public partial class ResultsViewModel : ViewModelBase
                 n = existing.Max() + 1;
         }
 
-        var resultsDir = Path.Combine(baseDir, $"VariLab_Results{n}");
+        var resultsDir = Path.Combine(baseDir, $"{prefix}{n}");
         Directory.CreateDirectory(resultsDir);
         return resultsDir;
     }
@@ -97,13 +135,24 @@ public partial class ResultsViewModel : ViewModelBase
         return $"{comps.Count} comp star ensemble ({srcText})";
     }
 
+    private string FailureOutputDir() =>
+        string.IsNullOrWhiteSpace(_data.OutputDirectory)
+            ? (string.IsNullOrWhiteSpace(_data.InputDirectory) ? "." : _data.InputDirectory)
+            : _data.OutputDirectory;
+
+    private void ReportFailure(string stage, string reason) =>
+        FailureReportService.Write(FailureOutputDir(), _data.TargetName,
+            _photometry.Mode == PhotometryMode.PsfFit ? "PsfFit" : "Aperture",
+            _data.InputDirectory, stage, reason);
+
     [RelayCommand]
     private void Run()
     {
         var used = _photometry.Points.Where(p => !p.Rejected && !p.ExcludedFromTransit).OrderBy(p => p.Jd).ToList();
         if (used.Count < 4)
         {
-            Status = "Need at least 4 accepted frames — run Photometry first.";
+            Status = $"Need at least 4 accepted frames — run Photometry first. (Have {used.Count}.)";
+            ReportFailure("Results", Status);
             return;
         }
 
@@ -132,6 +181,7 @@ public partial class ResultsViewModel : ViewModelBase
         if (result.Periodogram.Count == 0)
         {
             Status = "✗  Period search failed — check the min/max period range.";
+            ReportFailure("Results", Status);
             return;
         }
 
@@ -140,6 +190,31 @@ public partial class ResultsViewModel : ViewModelBase
         FoldPeriod = result.BestPeriod;
 
         Fold();
+
+        // ── Crowding flags (FWHM-residual regression) ──────────────────────────
+        _crowdingFlags = [];
+        var acceptedJds = new HashSet<double>(_jd);
+        if (_photometry.PerCompSeries is { Count: > 0 } perComp)
+        {
+            _crowdingFlags.AddRange(CrowdingFlagService.CheckComps(perComp, acceptedJds));
+            if (_photometry.TargetSeries is { Count: > 0 } targetSeries)
+                _crowdingFlags.AddRange(CrowdingFlagService.CheckTarget(
+                    targetSeries, perComp, acceptedJds, BestPeriod, BestPower, MinPeriodPowerForCrowdingCheck, _epoch));
+        }
+
+        CrowdingFlagsSummary = _crowdingFlags.Count > 0
+            ? string.Join("\n", _crowdingFlags.Select(f => f.Message))
+            : "";
+
+        // Full per-star detail to the session log, not a condensed one-liner — the log is the
+        // record you'd actually go back to when deciding whether a flagged star's data is
+        // trustworthy, so it needs the same explanation the Results tab shows, not just the
+        // bare numbers.
+        SessionLogService.Write(_crowdingFlags.Count > 0
+            ? $"[Results] Crowding flags: {_crowdingFlags.Count} star(s) flagged:"
+            : "[Results] Crowding flags: none.");
+        foreach (var f in _crowdingFlags)
+            SessionLogService.Write($"[Results]   {f.Message}");
 
         double mean = _mag.Average();
         double min  = _mag.Min();
@@ -160,13 +235,14 @@ public partial class ResultsViewModel : ViewModelBase
     }
 
     /// <summary>Writes the AAVSO Extended Format, Stellar Variability PNG, and Excel report
-    /// into a numbered "VariLab_ResultsN" subfolder of the Data tab's Output Directory (falls
-    /// back to the Target Directory if Output Directory is somehow blank) — no save
-    /// dialogs. Called automatically every time the period search runs (whether
+    /// into a "VariLab_Results_{Target}_{ObsDate}_N" subfolder of the Data tab's Output
+    /// Directory (falls back to the Target Directory if Output Directory is somehow blank) —
+    /// no save dialogs. Called automatically every time the period search runs (whether
     /// auto-triggered after Photometry or re-run manually after changing period settings),
-    /// so exports always reflect the current light curve/fold. Each run gets the next
-    /// available VariLab_ResultsN folder (VariLab_Results1, VariLab_Results2, ...), so separate
-    /// runs never mix their output together. All three files from one run share a single
+    /// so exports always reflect the current light curve/fold. Each run gets the next available
+    /// numbered folder for that target/night (..._1, ..._2, ...), so separate runs never mix
+    /// their output together, and the folder name alone identifies which target and night it
+    /// holds without having to open it. All three files from one run share a single
     /// millisecond-precision timestamp computed once (not one call to Timestamp() per file), so
     /// they can't drift apart or collide with another run's files even if two runs land in the
     /// same second. If any file fails to write, the partially-written VariLab_ResultsN folder is
@@ -181,11 +257,14 @@ public partial class ResultsViewModel : ViewModelBase
         var name    = string.IsNullOrWhiteSpace(_data.TargetName) ? "target" : _data.TargetName;
         var previousPngPath = LastVariabilityPngPath;
 
+        string modeTag   = _photometry.Mode == PhotometryMode.PsfFit ? "PsfFit" : "Aperture";
+        string modeLabel = _photometry.Mode == PhotometryMode.PsfFit ? "PSF Fit" : "Aperture";
+
         string? dir = null;
         try
         {
             Directory.CreateDirectory(baseDir);
-            dir = GetNextResultsDir(baseDir);
+            dir = GetNextResultsDir(baseDir, name, _jd[0], modeTag);
             var ts = Timestamp();
 
             var rows = new List<AavsoExportService.ExportRow>(_jd.Length);
@@ -200,7 +279,11 @@ public partial class ResultsViewModel : ViewModelBase
             // AAVSO Extended Format
             var compNotes = AavsoExportService.BuildCompNotes(_compStars.Stars.ToList());
             var flipNote  = AavsoExportService.BuildFlipNote(_photometry.Points);
-            var notes = string.Join("; ", new[] { compNotes, flipNote }.Where(s => !string.IsNullOrWhiteSpace(s)));
+            var methodNote  = $"Photometry method: {modeLabel}";
+            var crowdingNote = _crowdingFlags.Count > 0
+                ? $"Crowding flags: {string.Join(", ", _crowdingFlags.Select(f => $"{f.StarLabel} (r={f.R:F2}, p={f.PValue:F4})"))} — see USER_GUIDE.md Appendix B"
+                : "";
+            var notes = string.Join("; ", new[] { methodNote, compNotes, flipNote, crowdingNote }.Where(s => !string.IsNullOrWhiteSpace(s)));
             var aavsoText = AavsoExportService.Build(
                 _data.TargetName, _data.AavsoObserverCode, _data.FilterCode, $"VariLab v{VariLab.AppVersion.Version}",
                 rows, notes);
@@ -214,7 +297,7 @@ public partial class ResultsViewModel : ViewModelBase
             double magMean = _mag.Average();
             double magMin  = _mag.Min();
             double magMax  = _mag.Max();
-            var subtitle = $"{BuildCompSourceLabel(_compStars.Stars)}  |  Filter: {_data.FilterCode}\n" +
+            var subtitle = $"{BuildCompSourceLabel(_compStars.Stars)}  |  Filter: {_data.FilterCode}  |  Method: {modeLabel}\n" +
                             $"Mean mag: {magMean:F3}  |  Amplitude: {magMax - magMin:F3}  |  Range: {magMin:F3}–{magMax:F3}";
             var pngPath = Path.Combine(dir, $"{name}_Stellar_Variability_{ts}.png");
             PlotExportService.ExportStellarVariabilityPng(pngPath, points, _magErr, title, "Time [JD]", yLabel, subtitle: subtitle);
@@ -232,7 +315,7 @@ public partial class ResultsViewModel : ViewModelBase
             };
             var excelPath = Path.Combine(dir, $"{name}_Report_{ts}.xlsx");
             ExcelExportService.Export(excelPath, _data.FilterCode, excelRows, plots,
-                _compStars.Stars.ToList(), _compStars.RejectedStars.ToList());
+                _compStars.Stars.ToList(), _compStars.RejectedStars.ToList(), modeLabel, _crowdingFlags);
 
             int nCompFiles = 0;
             if (_photometry.PerCompSeries is { Count: > 0 } perComp)
@@ -240,13 +323,21 @@ public partial class ResultsViewModel : ViewModelBase
                 nCompFiles = ExportPerCompDiagnosticFiles(dir, perComp, _photometry.TargetSeries);
             }
 
+            // Field image — best-effort: re-reads the reference frame from disk, so this can
+            // fail on its own (moved/deleted file) without invalidating the AAVSO/PNG/Excel/
+            // CompDiagnostics files already written above, which don't depend on the FITS file
+            // still being there.
+            string? fieldImageName = TryExportFieldImage(dir, name, ts);
+
             Status = $"✓  Saved to {dir}:  {Path.GetFileName(aavsoPath)}, {Path.GetFileName(pngPath)}, {Path.GetFileName(excelPath)}" +
-                     (nCompFiles > 0 ? $", CompDiagnostics/ ({nCompFiles} stars)" : "");
+                     (nCompFiles > 0 ? $", CompDiagnostics/ ({nCompFiles} stars)" : "") +
+                     (fieldImageName is not null ? $", {fieldImageName}" : "");
         }
         catch (Exception ex)
         {
             Status = $"✗  Auto-export failed: {ex.Message}";
             SessionLogService.Write($"[Results] Auto-export failed: {ex}");
+            ReportFailure("Results", $"Auto-export failed: {ex.Message}");
 
             // Don't leave a partial export behind — e.g. a correct AAVSO .txt sitting next to
             // a missing or stale PNG/Excel file, which is exactly the kind of silent
@@ -329,6 +420,69 @@ public partial class ResultsViewModel : ViewModelBase
 
     private static string SanitizeFileName(string label) => Regex.Replace(label, @"[^\w\-]+", "_").Trim('_');
 
+    /// <summary>Renders the annotated field image (reference frame + target/comp circles and
+    /// aperture/annulus footprint) into the results folder. Best-effort: re-reads the reference
+    /// frame from disk (the same first file <see cref="PhotometryService.RunAsync"/> used to
+    /// size the aperture), so a moved/deleted FITS file, missing WCS, etc. just skips this file
+    /// rather than failing the whole export — returns null in that case, or the exported
+    /// filename on success.</summary>
+    private string? TryExportFieldImage(string dir, string name, string ts)
+    {
+        try
+        {
+            if (!CoordinateParser.TryParseRa(_data.TargetRaText, out var ra) ||
+                !CoordinateParser.TryParseDec(_data.TargetDecText, out var dec))
+                return null;
+
+            var files = FitsHeaderService.FindAllFits(_data.InputDirectory);
+            if (files.Length == 0) return null;
+
+            var hdr   = FitsHeaderService.Read(files[0]);
+            var wcs   = WcsService.ReadWcs(hdr);
+            var image = PsfService.ReadFitsPixels(files[0]);
+            if (wcs is null || image is null) return null;
+
+            var tpx = WcsService.SkyToPixel(wcs, ra, dec);
+            if (tpx is null) return null;
+
+            var comps = _compStars.Stars
+                .Select((s, i) => new FieldMarker(s.X, s.Y, $"C{i + 1}"))
+                .ToList();
+            if (comps.Count == 0) return null;
+
+            var target = new FieldMarker(tpx.Value.X, tpx.Value.Y, _data.TargetName);
+            var title = $"{_data.TargetName} — Field ({comps.Count} comps)";
+            // Annulus doesn't apply to PSF Fit mode (each frame's PSF fit has its own footprint,
+            // not one fixed sky-background ring for the whole run) — annulus radii stay 0, which
+            // FieldImageControl already correctly skips drawing (its own `if (AnnulusOuterPx > 0)`
+            // guards). The *aperture* circle is different: PSF Fit still has a real star position
+            // worth marking, so it gets a small fixed *visual* marker radius here — not tied to
+            // any real photometric footprint, just "here's the star" — instead of 0, which
+            // previously meant no circle drew at all (issue #6: PSF Fit field images had no
+            // circles around target or comps whatsoever).
+            const double PsfFitMarkerRadiusPx = 10.0;
+            bool isPsfFit = _photometry.Mode == PhotometryMode.PsfFit;
+            var subtitle = isPsfFit
+                ? $"{Path.GetFileName(files[0])}\nMethod: PSF Fit"
+                : $"{Path.GetFileName(files[0])}\n" +
+                  $"Aperture: {_photometry.ApertureRadiusPx:F1}px  |  Annulus: {_photometry.AnnulusInnerPx:F1}-{_photometry.AnnulusOuterPx:F1}px";
+
+            var fieldPath = Path.Combine(dir, $"{name}_FieldImage_{ts}.png");
+            bool ok = FieldImageService.ExportFieldImagePng(
+                fieldPath, image, target, comps,
+                isPsfFit ? PsfFitMarkerRadiusPx : _photometry.ApertureRadiusPx,
+                isPsfFit ? 0 : _photometry.AnnulusInnerPx,
+                isPsfFit ? 0 : _photometry.AnnulusOuterPx,
+                title, subtitle);
+            return ok ? Path.GetFileName(fieldPath) : null;
+        }
+        catch (Exception ex)
+        {
+            SessionLogService.Write($"[Results] Field image export failed: {ex}");
+            return null;
+        }
+    }
+
     [RelayCommand]
     private async Task ViewPng()
     {
@@ -350,6 +504,8 @@ public partial class ResultsViewModel : ViewModelBase
         LightCurvePoints        = null;
         PhaseFoldedPoints       = null;
         LastVariabilityPngPath  = null;
+        CrowdingFlagsSummary    = "";
+        _crowdingFlags = [];
         _jd      = [];
         _mag     = [];
         _magErr  = [];
