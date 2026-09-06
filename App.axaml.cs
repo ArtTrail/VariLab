@@ -32,6 +32,7 @@ public partial class App : Application
                 Views.TargetOffFrameDialog.ShowAsync(mainWindow, targetRa, targetDec, pixelX, pixelY, naxis1, naxis2);
             vm.BrowseUpdateFolderFunc = mainWindow.BrowseUpdateFolderAsync;
             vm.ShowInfoFunc           = mainWindow.ShowInfoAsync;
+            vm.RequestAppExitAction   = () => mainWindow.Close();
 
             desktop.MainWindow = mainWindow;
         }

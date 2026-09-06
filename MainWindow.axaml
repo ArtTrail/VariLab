@@ -46,6 +46,11 @@
                            Foreground="#90ee90"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
+                <Button Content="Update Now"
+                        Command="{Binding SelfUpdateNowCommand}"
+                        IsVisible="{Binding CanSelfUpdate}"
+                        Classes="primary"
+                        ToolTip.Tip="Downloads and installs the update automatically — VariLab will close and reopen on its own. (Only shown for installer-based installs.)"/>
                 <Button Content="Download"
                         Command="{Binding DownloadUpdateCommand}"
                         Classes="toolbar"

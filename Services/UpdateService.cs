@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Runtime.Versioning;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -12,8 +14,10 @@ namespace VariLab.Services;
 public record UpdateInfo(string Version, string AssetName, string DownloadUrl);
 
 /// <summary>Checks GitHub Releases for a newer VariLab version — same pattern as TransitLab's
-/// own UpdateService, minus the Windows Inno-installer self-update path (VariLab currently
-/// ships as plain per-platform zip/dmg archives on all three platforms, no installer yet).</summary>
+/// own UpdateService. The plain zip/dmg path (CheckAsync) works on all platforms; the Windows
+/// Inno-installer self-update path (CheckInstallerAsync / IsSelfUpdateCapable /
+/// LaunchSilentInstall) mirrors TransitLab's and only activates for a copy actually installed
+/// via VariLab-Setup-*.exe (see installer\VariLab.iss).</summary>
 public static class UpdateService
 {
     private const string AllApiUrl = "https://api.github.com/repos/ArtTrail/VariLab/releases";
@@ -71,6 +75,83 @@ public static class UpdateService
             done += read;
             progress?.Report((done, total));
         }
+    }
+
+    // ── Windows Inno-installer self-update path (mirrors TransitLab's) ─────────
+    // Fixed AppId GUID from installer\VariLab.iss — identifies the Inno-managed install's
+    // uninstall registry entry regardless of what folder the user chose during setup.
+    private const string InstallerAppId = "{5C51BDAC-BBAC-49F9-830F-920AA743B664}_is1";
+
+    /// <summary>Looks for a Setup .exe asset (VariLab-Setup-vX.Y.Z.exe, built by
+    /// installer\VariLab.iss) on the latest release — the self-update path, distinct from
+    /// CheckAsync's plain zip/dmg. Windows only; Inno installers don't exist on other platforms.</summary>
+    public static async Task<UpdateInfo?> CheckInstallerAsync(string currentVersion, CancellationToken ct = default)
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+        try
+        {
+            var root = await FindLatestAppReleaseAsync(ct);
+            var tag = root?["tag_name"]?.GetValue<string>();
+            if (tag is null) return null;
+
+            var latestVersion = tag.TrimStart('v');
+            if (!IsNewer(latestVersion, currentVersion)) return null;
+
+            var assets = root?["assets"]?.AsArray();
+            if (assets is null) return null;
+
+            foreach (var asset in assets)
+            {
+                var name = asset?["name"]?.GetValue<string>() ?? "";
+                var url  = asset?["browser_download_url"]?.GetValue<string>() ?? "";
+                if (name.StartsWith("VariLab-Setup-", StringComparison.OrdinalIgnoreCase) &&
+                    name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                    return new UpdateInfo(latestVersion, name, url);
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>True when this running instance is an Inno-managed install (installer\VariLab.iss)
+    /// — found via its fixed-AppId uninstall registry entry, with the entry's InstallLocation
+    /// matching where this process is actually running from. A portable/manually-placed copy (the
+    /// win-x64 zip) always returns false, since silently reinstalling over it would create a
+    /// second, separate install rather than upgrading the running one.</summary>
+    public static bool IsSelfUpdateCapable()
+    {
+        if (!OperatingSystem.IsWindows()) return false;
+        try
+        {
+            var installLocation = GetInstallerInstallLocation();
+            if (string.IsNullOrWhiteSpace(installLocation)) return false;
+
+            var runningDir = AppContext.BaseDirectory.TrimEnd('\\', '/');
+            return string.Equals(runningDir, installLocation.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static string? GetInstallerInstallLocation()
+    {
+        using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+            $@"Software\Microsoft\Windows\CurrentVersion\Uninstall\{InstallerAppId}");
+        return key?.GetValue("InstallLocation") as string;
+    }
+
+    /// <summary>Launches the downloaded Setup .exe silently. Inno's Restart Manager-based
+    /// CloseApplications detects the file lock this running instance holds on VariLab.exe and
+    /// closes it — /CLOSEAPPLICATIONS answers that silently. The installer's own [Run] section
+    /// then reopens VariLab once the install finishes.</summary>
+    public static void LaunchSilentInstall(string installerPath)
+    {
+        Process.Start(new ProcessStartInfo
+        {
+            FileName        = installerPath,
+            Arguments       = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS",
+            UseShellExecute = true,
+        });
     }
 
     private static async Task<JsonNode?> FindLatestAppReleaseAsync(CancellationToken ct)
