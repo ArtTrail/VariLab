@@ -31,6 +31,8 @@
 
             <TextBlock Classes="h2" Text="Light Curve" Margin="0,8,0,0"/>
             <ctrl:ScatterPlotControl Height="220" Points="{Binding LightCurvePoints}"
+                                     PointErrors="{Binding LightCurveErrors}"
+                                     PointLabels="{Binding LightCurveLabels}"
                                      XLabel="JD − JD0 (days)" YLabel="Mag" InvertY="True"/>
 
             <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,8,0,0">
@@ -42,6 +44,8 @@
                 <Button Classes="toolbar" Content="Fold" Command="{Binding FoldCommand}"/>
             </StackPanel>
             <ctrl:ScatterPlotControl Height="220" Points="{Binding PhaseFoldedPoints}"
+                                     PointErrors="{Binding PhaseFoldedErrors}"
+                                     PointLabels="{Binding PhaseFoldedLabels}"
                                      XLabel="Phase" YLabel="Mag" InvertY="True"/>
 
             <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">

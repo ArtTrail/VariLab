@@ -206,8 +206,16 @@ def list_fits(input_dir):
             imagetyp = str(fits.getheader(p).get("IMAGETYP", "")).strip().upper()
         except Exception:
             imagetyp = ""
-        if imagetyp and imagetyp != "LIGHT":
-            log(f"Skipping non-light frame: {p.name} (IMAGETYP={imagetyp})")
+        # Skip only frames whose IMAGETYP clearly marks them as calibration
+        # (bias/dark/flat/zero). Everything else — "LIGHT", "LIGHT FRAME", "Light",
+        # "SCIENCE", "OBJECT", or a blank IMAGETYP — is treated as a real observation.
+        # Issue #26: the old check required IMAGETYP to equal exactly "LIGHT" and wrongly
+        # rejected common spellings like "LIGHT FRAME" (written by NINA and others),
+        # skipping every frame and leaving 0 accepted. Keying off the calibration types we
+        # actually want to exclude (a deny-list) is the real intent, and is robust to however
+        # a given capture program spells its light frames.
+        if imagetyp and any(k in imagetyp for k in ("BIAS", "DARK", "FLAT", "ZERO")):
+            log(f"Skipping calibration frame: {p.name} (IMAGETYP={imagetyp})")
             continue
         files.append(p)
     return files

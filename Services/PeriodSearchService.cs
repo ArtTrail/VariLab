@@ -120,6 +120,31 @@ public static class PeriodSearchService
         return points.OrderBy(p => p.X).ToList();
     }
 
+    /// <summary>Same fold as <see cref="PhaseFold"/>, but also returns per-point error and label
+    /// (source filename) arrays aligned to the returned points — so the Results-tab hover tooltip
+    /// (issue #27) can show mag ± uncertainty and the source frame on the folded plot too. Each
+    /// input frame is duplicated (phase and phase+1) and the whole set sorted by phase; the meta
+    /// arrays are carried through that duplication+sort so index i lines up across all three.</summary>
+    public static (List<PlotPoint> Points, List<double> Errors, List<string> Labels) PhaseFoldWithMeta(
+        IReadOnlyList<double> jd, IReadOnlyList<double> mag, IReadOnlyList<double> err,
+        IReadOnlyList<string> labels, double period, double epoch)
+    {
+        var rows = new List<(PlotPoint P, double E, string L)>(jd.Count * 2);
+        for (int i = 0; i < jd.Count; i++)
+        {
+            double phase = (jd[i] - epoch) / period;
+            phase -= Math.Floor(phase);
+            double e = i < err.Count ? err[i] : 0.0;
+            string l = i < labels.Count ? labels[i] : "";
+            rows.Add((new PlotPoint(phase, mag[i]), e, l));
+            rows.Add((new PlotPoint(phase + 1.0, mag[i]), e, l));
+        }
+        rows.Sort((a, b) => a.P.X.CompareTo(b.P.X));
+        return (rows.Select(r => r.P).ToList(),
+                rows.Select(r => r.E).ToList(),
+                rows.Select(r => r.L).ToList());
+    }
+
     /// <summary>Per-frame residual from a binned phase-folded curve, in the same order as the
     /// input jd/mag arrays (unlike <see cref="PhaseFold"/>, which duplicates/reorders points
     /// for plotting). Bins the [0,1) phase range into <paramref name="nBins"/> and subtracts

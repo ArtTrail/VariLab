@@ -37,6 +37,7 @@ platform.
 8. [Appendix A: Sources for AAVSO-related design decisions](#appendix-a-sources-for-aavso-related-design-decisions)
 9. [Appendix B: PSF photometry vs. difference imaging in crowded fields](#appendix-b-psf-photometry-vs-difference-imaging-in-crowded-fields)
 10. [Appendix C: From Python to C# — How VariLab Was Built](#appendix-c-from-python-to-c--how-varilab-was-built)
+11. [Appendix D: How VariLab Measures a Star's Brightness (Aperture, PSF Fit, and ePSF)](#appendix-d-how-varilab-measures-a-stars-brightness-aperture-psf-fit-and-epsf)
 
 ---
 
@@ -331,7 +332,20 @@ tried yet.
     the workbook
 - **CompDiagnostics (subfolder)** — one CSV and one quick-look PNG light curve per
   star, the target plus every comp: `JD, Mag, Weight, Airmass, Flux, PeakADU,
-  Background, FWHM_X, FWHM_Y, FWHM_Mean`. Mag/Weight are the same bias-corrected
+  Background, FWHM_X, FWHM_Y, FWHM_Mean`.
+  **Important — what the `Mag` column / plot actually shows:** every file here plots
+  the **target's** magnitude, *not* the brightness of the star named in the title.
+  The "Target" file is the final ensemble (weighted-median) light curve; each "Cn"
+  file ("…measured via comp Cn only") is that *same target* measured against that
+  one comp star alone. So a "Cn" plot showing the target's pulsation shape is
+  expected and correct — it does **not** mean the comp is variable. A comp's own
+  brightness is essentially constant; what varies is the target in the numerator of
+  the differential ratio. (The comp's own raw counts are the `Flux` column, which
+  stays steady frame-to-frame and drifts only slowly with airmass/transparency.)
+  The real diagnostic value is cross-checking *agreement*: if one "Cn" curve
+  disagrees in shape with the others, that comp is suspect; if they all agree (the
+  normal case), the ensemble is healthy.
+  Mag/Weight are the same bias-corrected
   per-comp values that feed the weighted-median combination on the Photometry tab;
   Flux/PeakADU/Background are the same aperture-photometry values already computed
   for the main pipeline; FWHM_X/FWHM_Y come from an added per-frame PSF moment
@@ -586,4 +600,80 @@ from it.
   speed audit, a completely unrelated discovery that AAVSO had quietly moved two of the
   URLs this app's own comp-star pipeline depends on, silently degrading every affected
   run for some time before anyone noticed.
-| `FILT` export mapping for filters with no valid AAVSO ShortName (`L`→`CV`, `C`→`CV`, `CBB`→`CR`, `Rc`→`R`, `Ic`→`I`) — confirmed `L` isn't an accepted ShortName, and that AAVSO's own documented practice for Luminance/Clear/CBB imaging is to submit as CV or CR referenced to whichever comp-star band was used | [Filter Band ShortNames API](https://vsx.aavso.org/index.php?view=api.bands), [How to submit and measure images with a clear or luminance filter?](https://www.aavso.org/how-submit-and-measure-images-clear-or-luminance-filter), [Luminance filter](https://www.aavso.org/luminance-filter) |
+
+---
+
+## Appendix D: How VariLab Measures a Star's Brightness (Aperture, PSF Fit, and ePSF)
+
+A plain-English tour of what actually happens when VariLab measures a star — no math
+background needed. (A more technical companion is [Appendix C](#appendix-c-from-python-to-c--how-varilab-was-built).)
+
+### The basic question
+
+Every brightness measurement is really answering one question: of all the light that
+landed on the camera, how much came from *this* star — not from the sky glow around it,
+or from a neighboring star? VariLab offers two ways to answer it, **Aperture** and
+**PSF Fit**, and you can run either or both.
+
+### Aperture photometry — the bucket method
+
+Draw a circle around the star, add up all the light inside it, then estimate the sky
+background from a thin ring just outside that circle and subtract it. Whatever's left is
+the star's light. It's simple, fast, and very robust — the right choice for most stars.
+Its one weakness: the circle can't tell whose light is whose, so if another star sits
+close to your target, some of that neighbor's light falls inside the circle and gets
+counted as the target's. In an empty field that never happens; in a crowded field (like
+a globular-cluster core) it can.
+
+### PSF Fit — the shape method
+
+Instead of a fixed circle, PSF Fit uses the fact that every star in a given image has
+essentially the same *shape* (see below). It takes that shape and fits it to the
+target — and, crucially, can fit the target and any close neighbors **at the same
+time**, each with the same shape but its own brightness. Because it solves for all of
+them together, it can pull apart light that a plain circle would have lumped into one
+blob. That makes it the better tool in crowded fields.
+
+### So what is a "PSF"?
+
+PSF stands for **Point Spread Function**. A star is so far away it's effectively a
+single point of light — but by the time that light passes through the atmosphere and
+your telescope and lands on the sensor, it's been smeared into a small fuzzy blob a few
+pixels across (that smearing is what "seeing" refers to). The PSF is simply the *shape*
+of that blob. The key idea: within one image, that shape is almost identical for every
+star — bright stars just make a taller version of the same shape, faint stars a shorter
+one. So if you know the shape, you can recognize and measure any star in the frame.
+
+### And what's the "e" in ePSF?
+
+There are two ways to describe the blob shape. One is to **assume** a standard
+mathematical curve (a bell curve, roughly) — quick, but real star images have subtle
+asymmetries, wings, and quirks a formula doesn't capture. The other is to **measure**
+the real shape directly from your own image — and that's an **ePSF**, an *empirical* PSF
+(empirical = measured from the data, not assumed). VariLab builds its ePSF by finding a
+few dozen bright, isolated, unsaturated stars in the reference frame and averaging them
+into one high-resolution template of exactly what a star looks like in that image, then
+fits that template to the target and its neighbors. It's a bit like learning a person's
+handwriting from many samples so you can read a smudged word they wrote — rather than
+assuming everyone writes in the same standard font.
+
+### Which should I use?
+
+For an isolated target, Aperture is simple and excellent — start there. Reach for PSF
+Fit when a neighbor sits close enough that a circle would catch its light (dense or
+cluster fields). You can also run both and compare; on an isolated star they should
+agree closely. One honest caveat: when a neighbor is extremely close *and* bright, even
+simultaneous PSF fitting can mis-split their light — see
+[Appendix B](#appendix-b-psf-photometry-vs-difference-imaging-in-crowded-fields) for
+when a fundamentally different technique (difference imaging) is needed.
+
+### Under the hood
+
+Aperture photometry is written in native C# (no Python needed). PSF Fit is the one part
+of VariLab that runs a small bundled Python engine, because it relies on **photutils** —
+a mature, widely-used library in the **astropy** ecosystem — to build the ePSF and do
+the simultaneous fitting. That engine uses **astropy** for reading the FITS images,
+sky-to-pixel coordinate conversion, background/noise statistics, and time handling, plus
+**numpy** and **scipy** for the number-crunching. It's set up once, automatically, the
+first time you use PSF Fit (Photometry tab → PSF Engine Setup) — you don't need Python
+installed yourself.

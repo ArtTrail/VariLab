@@ -31,11 +31,14 @@ public partial class ResultsView : UserControl
         }
 
         var image = new Image { Source = bitmap, Stretch = Avalonia.Media.Stretch.Uniform };
+        // Issue #24 — pop-up plots open at half the previous size (image is Stretch=Uniform, so it
+        // just renders smaller; the window is still resizable to enlarge). Caps halved 1200→600 /
+        // 900→450 to match.
         var win = new Window
         {
             Title                 = System.IO.Path.GetFileName(path),
-            Width                 = Math.Min(bitmap.PixelSize.Width + 40, 1200),
-            Height                = Math.Min(bitmap.PixelSize.Height + 60, 900),
+            Width                 = Math.Min(bitmap.PixelSize.Width / 2.0 + 40, 600),
+            Height                = Math.Min(bitmap.PixelSize.Height / 2.0 + 60, 450),
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Content               = new ScrollViewer { Content = image },
         };

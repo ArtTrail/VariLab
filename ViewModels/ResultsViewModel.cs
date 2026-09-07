@@ -45,6 +45,13 @@ public partial class ResultsViewModel : ViewModelBase
     [ObservableProperty] private IReadOnlyList<PlotPoint>? _lightCurvePoints;
     [ObservableProperty] private IReadOnlyList<PlotPoint>? _phaseFoldedPoints;
 
+    // Issue #27 — per-point metadata for the plot hover tooltips (uncertainty + source frame),
+    // parallel by index to the *Points lists above.
+    [ObservableProperty] private IReadOnlyList<double>? _lightCurveErrors;
+    [ObservableProperty] private IReadOnlyList<string>? _lightCurveLabels;
+    [ObservableProperty] private IReadOnlyList<double>? _phaseFoldedErrors;
+    [ObservableProperty] private IReadOnlyList<string>? _phaseFoldedLabels;
+
     /// <summary>Path of the most recently auto-saved Stellar Variability PNG, if any —
     /// used to enable the "View PNG" button.</summary>
     [ObservableProperty] private string? _lastVariabilityPngPath;
@@ -67,6 +74,7 @@ public partial class ResultsViewModel : ViewModelBase
     private double[] _mag = [];
     private double[] _magErr = [];
     private double[] _airmass = [];
+    private string[] _files = [];
     private double? _lastAutoMaxPeriod;
     private double _epoch;
 
@@ -152,7 +160,13 @@ public partial class ResultsViewModel : ViewModelBase
         if (used.Count < 4)
         {
             Status = $"Need at least 4 accepted frames — run Photometry first. (Have {used.Count}.)";
-            ReportFailure("Results", Status);
+            // Issue #30 — only record a failure folder here when photometry produced SOME frames
+            // but too few (1-3). When it produced zero, PhotometryViewModel.Run() has already
+            // written a detailed "Photometry"-stage failure folder for this run; re-reporting the
+            // same failure here just creates a redundant second folder (and inflates the run
+            // number). One logical failure → one folder.
+            if (used.Count > 0)
+                ReportFailure("Results", Status);
             return;
         }
 
@@ -160,9 +174,12 @@ public partial class ResultsViewModel : ViewModelBase
         _mag     = used.Select(p => p.TargetMag).ToArray();
         _magErr  = used.Select(p => p.TargetMagErr).ToArray();
         _airmass = used.Select(p => p.Airmass ?? double.NaN).ToArray();
+        _files   = used.Select(p => System.IO.Path.GetFileName(p.FileName)).ToArray();
         _epoch   = _jd[0];
 
-        LightCurvePoints = _jd.Select((j, i) => new PlotPoint(j - _epoch, _mag[i])).ToList();
+        LightCurvePoints  = _jd.Select((j, i) => new PlotPoint(j - _epoch, _mag[i])).ToList();
+        LightCurveErrors  = _magErr;                 // issue #27 — tooltip uncertainty
+        LightCurveLabels  = _files;                  // issue #27 — tooltip source frame
 
         // Auto-suggest Max period from the measured baseline (need ≥2 cycles to resolve a
         // period reliably, so cap at baseline/2) — unless the user has since typed their own
@@ -231,7 +248,11 @@ public partial class ResultsViewModel : ViewModelBase
     private void Fold()
     {
         if (_jd.Length == 0 || FoldPeriod <= 0) return;
-        PhaseFoldedPoints = PeriodSearchService.PhaseFold(_jd, _mag, FoldPeriod, _epoch);
+        var (pts, errs, labels) = PeriodSearchService.PhaseFoldWithMeta(
+            _jd, _mag, _magErr, _files, FoldPeriod, _epoch);
+        PhaseFoldedPoints = pts;
+        PhaseFoldedErrors = errs;      // issue #27 — tooltip metadata, aligned to folded points
+        PhaseFoldedLabels = labels;
     }
 
     /// <summary>Writes the AAVSO Extended Format, Stellar Variability PNG, and Excel report
@@ -408,7 +429,15 @@ public partial class ResultsViewModel : ViewModelBase
             var jd0   = accepted[0].Jd;
             var plotPoints = accepted.Select(p => new PlotPoint(p.Jd - jd0, p.Mag)).ToList();
             var yErrors    = accepted.Select(p => 1.0857 / Math.Max(1.0, p.Weight)).ToList();
-            var title      = label == "Target" ? $"{_data.TargetName} — Target" : $"{_data.TargetName} — Comp {label}";
+            // These per-star diagnostics all plot the TARGET's magnitude, not the star named in
+            // the title: the "Target" file is the ensemble (weighted-median) light curve, and each
+            // "Cn" file is the same target measured against that ONE comp alone. Titled "via comp
+            // Cn" (not just "Comp Cn") so a reader doesn't mistake it for the comp's own brightness
+            // — a comp showing the target's pulsation shape is expected and correct, not a variable
+            // comp. (Confirmed confusing in practice; see USER_GUIDE.md Results-tab notes.)
+            var title      = label == "Target"
+                ? $"{_data.TargetName} — Target (ensemble median of all comps)"
+                : $"{_data.TargetName} — measured via comp {label} only";
             PlotExportService.ExportStellarVariabilityPng(
                 Path.Combine(compDir, $"{safeName}.png"), plotPoints, yErrors,
                 title, $"Time [JD - {jd0:F2}]", yLabel);
@@ -503,6 +532,10 @@ public partial class ResultsViewModel : ViewModelBase
         BestPower               = 0;
         LightCurvePoints        = null;
         PhaseFoldedPoints       = null;
+        LightCurveErrors        = null;
+        LightCurveLabels        = null;
+        PhaseFoldedErrors       = null;
+        PhaseFoldedLabels       = null;
         LastVariabilityPngPath  = null;
         CrowdingFlagsSummary    = "";
         _crowdingFlags = [];
@@ -510,6 +543,7 @@ public partial class ResultsViewModel : ViewModelBase
         _mag     = [];
         _magErr  = [];
         _airmass = [];
+        _files   = [];
         _epoch   = 0;
     }
 }

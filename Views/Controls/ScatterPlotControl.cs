@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Rendering;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,9 +15,24 @@ namespace VariLab.Views.Controls;
 /// matching the pattern already used by TransitLab's LightCurveControl /
 /// TransitGeometryControl (custom Avalonia Control.Render), so the eventual
 /// fold-in shares the same visual approach rather than a competing library.
+/// Hovering a point shows a tooltip with its X value, magnitude ± uncertainty, and
+/// source frame (issue #27) — the uncertainty/label come from the optional
+/// PointErrors/PointLabels lists, parallel to Points by index.
 /// </summary>
-public class ScatterPlotControl : Control
+public class ScatterPlotControl : Control, ICustomHitTest
 {
+    /// <summary>Optional per-point uncertainty for the hover tooltip (parallel to Points).
+    /// Distinct from YErrors, which also draws error bars; this is tooltip-only.</summary>
+    public static readonly StyledProperty<IReadOnlyList<double>?> PointErrorsProperty =
+        AvaloniaProperty.Register<ScatterPlotControl, IReadOnlyList<double>?>(nameof(PointErrors));
+
+    /// <summary>Optional per-point label (source frame filename) for the hover tooltip.</summary>
+    public static readonly StyledProperty<IReadOnlyList<string>?> PointLabelsProperty =
+        AvaloniaProperty.Register<ScatterPlotControl, IReadOnlyList<string>?>(nameof(PointLabels));
+
+    public IReadOnlyList<double>? PointErrors { get => GetValue(PointErrorsProperty); set => SetValue(PointErrorsProperty, value); }
+    public IReadOnlyList<string>? PointLabels { get => GetValue(PointLabelsProperty); set => SetValue(PointLabelsProperty, value); }
+
     public static readonly StyledProperty<IReadOnlyList<PlotPoint>?> PointsProperty =
         AvaloniaProperty.Register<ScatterPlotControl, IReadOnlyList<PlotPoint>?>(nameof(Points));
 
@@ -79,8 +96,23 @@ public class ScatterPlotControl : Control
     private static readonly IPen _linePen   = new Pen(_lineBrush, 1.2);
     private static readonly IPen _markerPen = new Pen(_markerBrush, 1.5);
 
+    // Hover tooltip (issue #27)
+    private static readonly IBrush _tipBgBrush   = new SolidColorBrush(Color.Parse("#3b4252"));
+    private static readonly IBrush _tipTextBrush = new SolidColorBrush(Color.Parse("#eceff4"));
+    private static readonly IPen   _tipBorderPen = new Pen(new SolidColorBrush(Color.Parse("#88c0d0")), 1.0);
+    private static readonly IBrush _hoverRing    = new SolidColorBrush(Color.Parse("#ebcb8b"));
+
+    private int _hoverIndex = -1;
+
+    // Coordinate-mapping params captured on the last Render, reused for pointer hit-testing.
+    private double _mL, _mT, _plotW, _plotH, _xMin, _xMax, _yMin, _yMax;
+    private bool _renderReady;
+
+    public bool HitTest(Point point) => true;   // whole control area is hover-sensitive
+
     public override void Render(DrawingContext ctx)
     {
+        _renderReady = false;
         var w = Bounds.Width;
         var h = Bounds.Height;
         if (w < 20 || h < 20) return;
@@ -117,6 +149,11 @@ public class ScatterPlotControl : Control
         double plotW = w - mL - mR;
         double plotH = h - mT - mB;
         if (plotW < 10 || plotH < 10) return;
+
+        // Capture mapping params for pointer hit-testing / tooltip (issue #27)
+        _mL = mL; _mT = mT; _plotW = plotW; _plotH = plotH;
+        _xMin = xMin; _xMax = xMax; _yMin = yMin; _yMax = yMax;
+        _renderReady = true;
 
         if (hasTitle)
         {
@@ -204,6 +241,90 @@ public class ScatterPlotControl : Control
                 ctx.DrawEllipse(pointBrush, null, new Point(px, py), 2.2, 2.2);
             }
         }
+
+        // ── Hover highlight + tooltip (issue #27) ──────────────────────────
+        if (_hoverIndex >= 0 && _hoverIndex < pts.Count)
+            DrawTooltip(ctx, pts, _hoverIndex, w, h);
+    }
+
+    private void DrawTooltip(DrawingContext ctx, IReadOnlyList<PlotPoint> pts, int i, double w, double h)
+    {
+        var p  = pts[i];
+        var px = MapX(p.X);
+        var py = MapY(p.Y);
+
+        // ring around the hovered point
+        ctx.DrawEllipse(null, new Pen(_hoverRing, 1.6), new Point(px, py), 5, 5);
+
+        // build tooltip lines
+        var errs = PointErrors;
+        var lbls = PointLabels;
+        bool isPhase = (XLabel ?? "").Contains("Phase", StringComparison.OrdinalIgnoreCase);
+        var lines = new List<string>
+        {
+            $"{(string.IsNullOrEmpty(XLabel) ? "X" : XLabel)}: {p.X.ToString(isPhase ? "F4" : "F5")}",
+            errs is not null && i < errs.Count
+                ? $"Mag: {p.Y:F4} ± {errs[i]:F4}"
+                : $"Mag: {p.Y:F4}",
+        };
+        if (lbls is not null && i < lbls.Count && !string.IsNullOrEmpty(lbls[i]))
+            lines.Add(lbls[i]);
+
+        var texts = lines.Select(t => MakeText(t, 11, _tipTextBrush)).ToList();
+        double boxW = texts.Max(t => t.Width) + 16;
+        double boxH = texts.Sum(t => t.Height) + 6 * (texts.Count - 1) + 12;
+
+        // place the box near the point, clamped inside the control
+        double bx = px + 12, by = py - boxH - 8;
+        if (bx + boxW > w - 4) bx = px - boxW - 12;
+        if (bx < 4) bx = 4;
+        if (by < 4) by = py + 12;
+        if (by + boxH > h - 4) by = h - boxH - 4;
+
+        ctx.DrawRectangle(_tipBgBrush, _tipBorderPen, new Rect(bx, by, boxW, boxH), 4, 4);
+        double ty = by + 6;
+        foreach (var t in texts)
+        {
+            ctx.DrawText(t, new Point(bx + 8, ty));
+            ty += t.Height + 6;
+        }
+    }
+
+    private double MapX(double x) => _mL + (x - _xMin) / (_xMax - _xMin) * _plotW;
+    private double MapY(double y) => InvertY
+        ? _mT + (y - _yMin) / (_yMax - _yMin) * _plotH
+        : _mT + _plotH - (y - _yMin) / (_yMax - _yMin) * _plotH;
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        var pts = Points;
+        if (!_renderReady || pts is null || pts.Count == 0) { SetHover(-1); return; }
+
+        var m = e.GetPosition(this);
+        int best = -1;
+        double bestD2 = 12 * 12;   // hit radius (px)
+        for (int i = 0; i < pts.Count; i++)
+        {
+            double dx = MapX(pts[i].X) - m.X;
+            double dy = MapY(pts[i].Y) - m.Y;
+            double d2 = dx * dx + dy * dy;
+            if (d2 < bestD2) { bestD2 = d2; best = i; }
+        }
+        SetHover(best);
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        SetHover(-1);
+    }
+
+    private void SetHover(int index)
+    {
+        if (index == _hoverIndex) return;
+        _hoverIndex = index;
+        InvalidateVisual();
     }
 
     private static bool TryParseColor(string s, out Color color)

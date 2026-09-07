@@ -11,6 +11,10 @@ namespace VariLab;
 
 public partial class MainWindow : Window
 {
+    // Issue #23 — set once the user has confirmed closing mid-processing, so the second
+    // programmatic Close() isn't intercepted again.
+    private bool _forceClose;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -22,6 +26,80 @@ public partial class MainWindow : Window
             if (DataContext is MainWindowViewModel vm)
                 await vm.RunStartupUpdateCheckAsync();
         };
+
+        // Issue #23 — warn before closing while Comp Stars or Photometry is still running, so an
+        // accidental window close doesn't silently abandon a long run. Closing can't be awaited,
+        // so cancel it, ask, and re-issue the close if confirmed.
+        Closing += async (_, e) =>
+        {
+            if (_forceClose) return;
+            if (DataContext is not MainWindowViewModel vm) return;
+            if (!vm.CompStars.IsRunning && !vm.Photometry.IsRunning) return;
+
+            e.Cancel = true;
+            bool ok = await ConfirmAsync(
+                "Processing in progress",
+                "VariLab is still processing (Comp Stars or Photometry is running).\n\n" +
+                "Closing now will stop it. Close anyway?");
+            if (ok)
+            {
+                _forceClose = true;
+                Close();
+            }
+        };
+    }
+
+    /// <summary>Modal Yes/No confirmation, returns true if the user chose the affirmative button.
+    /// Same visual style as ShowInfoAsync.</summary>
+    internal async Task<bool> ConfirmAsync(string title, string message,
+        string confirmText = "Close anyway", string cancelText = "Keep running")
+    {
+        var confirmBtn = new Button
+        {
+            Content = confirmText, MinWidth = 110,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+        };
+        var cancelBtn = new Button
+        {
+            Content = cancelText, MinWidth = 110,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            Classes = { "primary" },
+        };
+
+        var dialog = new Window
+        {
+            Title                 = title,
+            Width                 = 380,
+            SizeToContent         = SizeToContent.Height,
+            CanResize             = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new StackPanel
+            {
+                Margin  = new Avalonia.Thickness(28, 24, 28, 20),
+                Spacing = 18,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text          = message,
+                        TextWrapping  = Avalonia.Media.TextWrapping.Wrap,
+                        TextAlignment = Avalonia.Media.TextAlignment.Center,
+                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                    },
+                    new StackPanel
+                    {
+                        Orientation = Avalonia.Layout.Orientation.Horizontal,
+                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                        Spacing = 12,
+                        Children = { cancelBtn, confirmBtn },
+                    },
+                },
+            },
+        };
+
+        confirmBtn.Click += (_, _) => dialog.Close(true);
+        cancelBtn.Click  += (_, _) => dialog.Close(false);
+        return await dialog.ShowDialog<bool>(this);
     }
 
     internal async Task<string?> BrowseUpdateFolderAsync()
@@ -139,14 +217,35 @@ public partial class MainWindow : Window
 
     private void OnBatchProcessClick(object? sender, RoutedEventArgs e)
     {
-        var win = new Window
+        var batchVm = new BatchViewModel();
+        Window? win = null;
+        bool batchForceClose = false;
+        win = new Window
         {
             Title                 = "Batch Process",
             Width                 = 900,
             Height                = 950,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content               = new BatchView { DataContext = new BatchViewModel() },
+            Content               = new BatchView { DataContext = batchVm },
         };
+
+        // Issue #23 — same close-while-running guard as the main window, for the batch window.
+        win.Closing += async (_, ce) =>
+        {
+            if (batchForceClose) return;
+            if (!batchVm.IsRunning) return;
+
+            ce.Cancel = true;
+            bool ok = await ConfirmAsync(
+                "Batch in progress",
+                "A batch run is still processing.\n\nClosing now will stop it. Close anyway?");
+            if (ok)
+            {
+                batchForceClose = true;
+                win?.Close();
+            }
+        };
+
         win.Show(this);
     }
 

@@ -18,7 +18,7 @@
 ; AppVersion.Version on every release, same as every other version-stamped location in this repo.
 
 #define MyAppName "VariLab"
-#define MyAppVersion "1.5.1"
+#define MyAppVersion "1.5.3"
 #define MyAppPublisher "Art Trail"
 #define MyAppURL "https://github.com/ArtTrail/VariLab"
 #define MyAppExeName "VariLab.exe"
